@@ -39,7 +39,7 @@ apt-get install -y \
     build-essential
 
 # Optional tools
-echo "[3/7] Installing optional forensics tools..."
+echo "[3/9] Installing optional forensics tools..."
 apt-get install -y \
     autopsy \
     guymager \
@@ -50,10 +50,19 @@ apt-get install -y \
     rkhunter \
     lynis || true
 
-echo "[4/7] Installing Python dependencies..."
+# GUI dependencies
+echo "[4/9] Installing GUI dependencies..."
+apt-get install -y \
+    chromium-browser \
+    x11-xserver-utils \
+    unclutter \
+    xinit \
+    xorg || true
+
+echo "[5/9] Installing Python dependencies..."
 pip3 install -r requirements.txt
 
-echo "[5/7] Creating directories and setting up Vivisect..."
+echo "[6/9] Creating directories and setting up Vivisect..."
 INSTALL_DIR="/opt/vivisect"
 mkdir -p "$INSTALL_DIR"
 mkdir -p /etc/vivisect
@@ -88,22 +97,47 @@ fi
 
 # Make scripts executable
 chmod +x "$INSTALL_DIR/src/main.py"
+chmod +x "$INSTALL_DIR/src/web/run_server.py"
 chmod +x scripts/vivisect-daemon
+chmod +x scripts/launch-gui-kiosk.sh
 
 # Install daemon script
 cp scripts/vivisect-daemon /usr/local/bin/
 chmod +x /usr/local/bin/vivisect-daemon
 
+# Install GUI launcher
+cp scripts/launch-gui-kiosk.sh /usr/local/bin/launch-gui-kiosk
+chmod +x /usr/local/bin/launch-gui-kiosk
+
 # Create symlink for easy access
 ln -sf "$INSTALL_DIR/src/main.py" /usr/local/bin/vivisect
 chmod +x /usr/local/bin/vivisect
 
-echo "[6/7] Setting up systemd service..."
+# Create symlink for web GUI
+ln -sf "$INSTALL_DIR/src/web/run_server.py" /usr/local/bin/vivisect-gui
+chmod +x /usr/local/bin/vivisect-gui
+
+echo "[7/9] Setting up systemd services..."
 cp systemd/vivisect.service /etc/systemd/system/
+cp systemd/vivisect-gui.service /etc/systemd/system/
 systemctl daemon-reload
 
-echo "[7/7] Configuring auto-start..."
+echo "[8/9] Configuring services..."
+# Enable CLI service
 systemctl enable vivisect.service
+
+echo ""
+echo "GUI Setup:"
+read -p "Do you want to enable GUI kiosk mode on boot? (y/n) " -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    systemctl enable vivisect-gui.service
+    echo "✓ GUI kiosk mode will launch on boot"
+else
+    echo "○ GUI kiosk mode disabled (you can start manually with: vivisect-gui)"
+fi
+
+echo "[9/9] Final setup..."
 
 echo ""
 echo "================================================================"
@@ -115,14 +149,19 @@ echo "Configuration file: /etc/vivisect/vivisect.conf"
 echo "Output directory: /var/lib/vivisect/output"
 echo "Log directory: /var/log/vivisect"
 echo ""
-echo "Commands:"
-echo "  vivisect --help           Show help"
-echo "  vivisect collect <case>   Run full collection"
-echo "  systemctl start vivisect  Start service"
-echo "  systemctl status vivisect Check service status"
+echo "CLI Commands:"
+echo "  vivisect --help             Show help"
+echo "  vivisect collect <case>     Run full collection"
+echo "  systemctl start vivisect    Start backend service"
 echo ""
-echo "To start Vivisect now:"
-echo "  systemctl start vivisect"
+echo "GUI Commands:"
+echo "  vivisect-gui                Start web GUI server"
+echo "  launch-gui-kiosk            Launch GUI in kiosk mode"
+echo "  systemctl start vivisect-gui Start GUI kiosk on boot"
 echo ""
-echo "The service is configured to auto-start on boot."
+echo "Access Web GUI:"
+echo "  Browser: http://localhost:5000"
+echo "  Kiosk Mode: Enabled on boot (if selected)"
+echo ""
+echo "The CLI service is configured to auto-start on boot."
 echo "================================================================"

@@ -1,0 +1,21 @@
+[Unit]
+Description=Vivisect Digital Forensics Suite - GUI Kiosk Mode
+Documentation=https://github.com/vivisect/vivisect
+After=graphical.target network.target
+Wants=graphical.target
+
+[Service]
+Type=simple
+User=root
+Environment="DISPLAY=:0"
+Environment="XAUTHORITY=/root/.Xauthority"
+ExecStart=/usr/local/bin/launch-gui-kiosk
+Restart=always
+RestartSec=5
+
+# Security settings
+NoNewPrivileges=false
+PrivateTmp=yes
+
+[Install]
+WantedBy=graphical.target
