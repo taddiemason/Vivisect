@@ -1,0 +1,20 @@
+[Unit]
+Description=Vivisect USB Gadget Monitor
+Documentation=https://github.com/vivisect/vivisect
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/usb-gadget-monitor
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=usb-gadget-monitor
+
+# Create necessary directories
+ExecStartPre=/bin/mkdir -p /var/log/vivisect
+ExecStartPre=/bin/mkdir -p /var/lib/vivisect/output
+
+[Install]
+WantedBy=multi-user.target

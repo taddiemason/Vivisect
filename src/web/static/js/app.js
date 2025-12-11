@@ -64,6 +64,17 @@ function loadSystemStatus() {
             if (!data.error) {
                 document.getElementById('active-tasks').textContent = data.active_tasks;
                 document.getElementById('output-dir').textContent = data.output_dir;
+
+                // Update USB status
+                const usbStatus = document.getElementById('usb-status');
+                if (data.usb_connected) {
+                    usbStatus.innerHTML = '✅ Connected to Host PC';
+                    usbStatus.style.color = '#10b981';
+                } else {
+                    usbStatus.innerHTML = '⭕ Not Connected';
+                    usbStatus.style.color = '#64748b';
+                }
+
                 updateStatusIndicator('connected');
             }
         })

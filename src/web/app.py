@@ -17,7 +17,8 @@ from modules import (
     FileAnalysis,
     NetworkForensics,
     MemoryAnalysis,
-    ArtifactExtraction
+    ArtifactExtraction,
+    USBGadget
 )
 
 def create_app():
@@ -37,6 +38,7 @@ def create_app():
     network_forensics = NetworkForensics(logger, config)
     memory_analysis = MemoryAnalysis(logger, config)
     artifact_extraction = ArtifactExtraction(logger, config)
+    usb_gadget = USBGadget(logger, config)
 
     # Store active tasks
     active_tasks = {}
@@ -59,11 +61,13 @@ def create_app():
                     'file_analysis': config.get('modules.file_analysis.enabled', True),
                     'network_forensics': config.get('modules.network_forensics.enabled', True),
                     'memory_analysis': config.get('modules.memory_analysis.enabled', True),
-                    'artifact_extraction': config.get('modules.artifact_extraction.enabled', True)
+                    'artifact_extraction': config.get('modules.artifact_extraction.enabled', True),
+                    'usb_gadget': config.get('modules.usb_gadget.enabled', True)
                 },
                 'active_tasks': len(active_tasks),
                 'output_dir': config.get('output_dir'),
-                'log_dir': config.get('log_dir')
+                'log_dir': config.get('log_dir'),
+                'usb_connected': usb_gadget.is_connected_to_host()
             }
             return jsonify(status)
         except Exception as e:
@@ -338,6 +342,69 @@ def create_app():
                     return jsonify({'logs': lines})
             else:
                 return jsonify({'logs': []})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/usb/status')
+    def usb_gadget_status():
+        """Get USB gadget connection status"""
+        try:
+            status = usb_gadget.get_gadget_status()
+            connection_info = usb_gadget.get_connection_info()
+            return jsonify({
+                'status': status,
+                'connection': connection_info
+            })
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/usb/configure', methods=['POST'])
+    def configure_usb_network():
+        """Configure USB network interface"""
+        try:
+            result = usb_gadget.configure_network()
+            return jsonify(result)
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/usb/capture', methods=['POST'])
+    def start_usb_capture():
+        """Start packet capture on USB interface"""
+        try:
+            data = request.json or {}
+            output_file = data.get('output_file')
+
+            def run_capture():
+                result = usb_gadget.start_packet_capture(output_file)
+                socketio.emit('task_complete', {
+                    'task': 'usb_capture',
+                    'result': result
+                })
+
+            task_id = f"usb_capture_{datetime.now().timestamp()}"
+            active_tasks[task_id] = threading.Thread(target=run_capture)
+            active_tasks[task_id].start()
+
+            return jsonify({'task_id': task_id, 'status': 'started'})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/usb/auto-collect', methods=['POST'])
+    def start_auto_collection():
+        """Start automatic collection on USB connection"""
+        try:
+            def run_auto_collect():
+                result = usb_gadget.auto_collect_on_connection()
+                socketio.emit('task_complete', {
+                    'task': 'usb_auto_collect',
+                    'result': result
+                })
+
+            task_id = f"usb_auto_collect_{datetime.now().timestamp()}"
+            active_tasks[task_id] = threading.Thread(target=run_auto_collect)
+            active_tasks[task_id].start()
+
+            return jsonify({'task_id': task_id, 'status': 'started'})
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
