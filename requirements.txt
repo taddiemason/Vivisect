@@ -1,0 +1,26 @@
+# Vivisect Digital Forensics Suite
+# Python Dependencies
+
+# Core dependencies
+python-magic>=0.4.27
+
+# Network analysis
+scapy>=2.5.0
+
+# File system and disk imaging
+pytsk3>=20230125
+
+# Memory analysis (optional, requires compilation)
+# volatility3>=2.0.0
+
+# Database
+# Used for browser history extraction
+
+# Utilities
+colorama>=0.4.6
+tabulate>=0.9.0
+
+# Optional - Enhanced features
+# yara-python>=4.3.0  # For malware scanning
+# pefile>=2023.2.7    # For PE file analysis
+# pyelftools>=0.29    # For ELF file analysis

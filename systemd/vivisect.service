@@ -1,0 +1,24 @@
+[Unit]
+Description=Vivisect Digital Forensics Suite
+Documentation=https://github.com/vivisect/vivisect
+After=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/vivisect-daemon start
+ExecStop=/usr/local/bin/vivisect-daemon stop
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=vivisect
+
+# Security settings
+NoNewPrivileges=false
+PrivateTmp=yes
+
+# Restart policy
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
