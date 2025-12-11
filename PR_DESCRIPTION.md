@@ -1,15 +1,16 @@
-# Vivisect - Complete Digital Forensics Suite with Web GUI and Kiosk Mode
+# Vivisect - Complete Digital Forensics Suite with Web GUI and USB Gadget Mode
 
 ## 🎯 Overview
 
-This PR introduces **Vivisect**, a comprehensive all-in-one digital forensics platform for Debian-based systems with both CLI and Web GUI interfaces, optimized for devices with onboard displays.
+**Vivisect** is a comprehensive all-in-one digital forensics platform for Debian-based systems featuring CLI, Web GUI, and USB Gadget modes for maximum versatility.
 
 **Key Stats:**
-- 📦 **34 files** added
-- 💻 **6,587+ lines** of code
-- 🔧 **5 forensics modules**
-- 🌐 **Full web GUI** with kiosk mode
-- 📱 **Touch-screen optimized**
+- 📦 **40 files** added
+- 💻 **3,115+ lines** of Python code
+- 🔧 **6 forensics modules**
+- 🌐 **Touch-optimized web GUI** with kiosk mode
+- 🔌 **USB Gadget Mode** - plug directly into target PCs
+- 📱 **Field-ready** deployment options
 
 ---
 
@@ -56,6 +57,15 @@ This PR introduces **Vivisect**, a comprehensive all-in-one digital forensics pl
 - Persistence mechanism detection
 - Timeline creation
 - Credential searching
+
+#### 6. 🔌 USB Gadget Mode (NEW!)
+- **Plug directly into target PC** via USB
+- Appears as USB Ethernet adapter
+- **Automatic network capture** on connection
+- Host PC information extraction
+- Man-in-the-Middle mode support
+- Zero software installation on target
+- Perfect for Raspberry Pi Zero deployment
 
 ---
 
@@ -206,7 +216,8 @@ launch-gui-kiosk
 | **Frontend** | HTML5, CSS3, JavaScript |
 | **OS Support** | Debian, Ubuntu, Kali Linux |
 | **Display** | Any with X11 support |
-| **Lines of Code** | 6,587+ |
+| **Python Code** | 3,115+ lines |
+| **Total Files** | 40 files |
 
 ### Dependencies
 - `tcpdump`/`tshark` (network)
@@ -227,12 +238,13 @@ Vivisect/
 │   │   ├── config.py
 │   │   ├── logger.py
 │   │   └── report.py
-│   ├── modules/           # 5 forensics modules
+│   ├── modules/           # 6 forensics modules
 │   │   ├── disk_imaging.py
 │   │   ├── file_analysis.py
 │   │   ├── network_forensics.py
 │   │   ├── memory_analysis.py
-│   │   └── artifact_extraction.py
+│   │   ├── artifact_extraction.py
+│   │   └── usb_gadget.py
 │   ├── web/              # Web GUI (Flask app)
 │   │   ├── app.py
 │   │   ├── templates/
@@ -240,33 +252,38 @@ Vivisect/
 │   ├── cli.py            # CLI interface
 │   └── main.py           # Entry point
 ├── scripts/
-│   ├── install.sh        # Automated installer
-│   ├── uninstall.sh      # Clean removal
-│   ├── vivisect-daemon   # Service daemon
-│   └── launch-gui-kiosk.sh  # Kiosk launcher
+│   ├── install.sh            # Automated installer
+│   ├── uninstall.sh          # Clean removal
+│   ├── vivisect-daemon       # Service daemon
+│   ├── launch-gui-kiosk.sh   # Kiosk launcher
+│   ├── setup-usb-gadget.sh   # USB gadget setup
+│   └── usb-gadget-monitor.sh # USB monitor
 ├── systemd/
-│   ├── vivisect.service     # CLI service
-│   └── vivisect-gui.service # GUI service
-├── config/               # Configuration templates
-├── README.md            # Main documentation (492 lines)
-├── GUI_README.md        # GUI documentation (416 lines)
-├── GUI_QUICKSTART.md    # GUI quick start (312 lines)
-├── QUICKSTART.md        # CLI quick start (219 lines)
-└── LICENSE              # MIT License
+│   ├── vivisect.service            # CLI service
+│   ├── vivisect-gui.service        # GUI service
+│   └── usb-gadget-monitor.service  # USB monitor service
+├── config/                  # Configuration templates
+├── README.md               # Main documentation
+├── QUICKSTART.md           # CLI quick start
+├── GUI_README.md           # GUI documentation
+├── GUI_QUICKSTART.md       # GUI quick start
+├── USB_GADGET_README.md    # USB gadget mode guide
+└── LICENSE                 # MIT License
 ```
 
 ---
 
 ## 🎓 Documentation
 
-| Document | Description | Lines |
-|----------|-------------|-------|
-| **README.md** | Complete feature documentation | 492 |
-| **QUICKSTART.md** | Get started with CLI | 219 |
-| **GUI_README.md** | Complete GUI guide | 416 |
-| **GUI_QUICKSTART.md** | GUI quick start (2 commands) | 312 |
+| Document | Description |
+|----------|-------------|
+| **README.md** | Complete feature documentation |
+| **QUICKSTART.md** | CLI quick start guide |
+| **GUI_README.md** | Web GUI complete guide |
+| **GUI_QUICKSTART.md** | GUI quick start (2 commands) |
+| **USB_GADGET_README.md** | USB gadget mode guide |
 
-**Total Documentation:** 1,439 lines
+**5 comprehensive documentation files**
 
 ---
 
@@ -343,13 +360,14 @@ Built with support from open-source forensics tools:
 
 ## 📋 Implementation Checklist
 
-- [x] **All 5 forensics modules** implemented
+- [x] **All 6 forensics modules** implemented
 - [x] **CLI interface** with comprehensive commands
 - [x] **Web GUI** with touch optimization
 - [x] **Kiosk mode** for onboard displays
-- [x] **Auto-start systemd** services
+- [x] **USB Gadget Mode** for direct PC connection
+- [x] **Auto-start systemd** services (3 services)
 - [x] **Installation/uninstallation** scripts
-- [x] **Comprehensive documentation** (4 guides)
+- [x] **Comprehensive documentation** (5 guides)
 - [x] **Error handling** throughout
 - [x] **Logging system** (per-module)
 - [x] **Report generation** (JSON, HTML, text)
@@ -360,30 +378,37 @@ Built with support from open-source forensics tools:
 
 ## 🚀 Ready for Production
 
-This PR represents a **complete, production-ready digital forensics suite** with both CLI and GUI interfaces, optimized for field deployment on devices with onboard displays.
+This PR represents a **complete, production-ready digital forensics suite** with CLI, Web GUI, and USB Gadget modes for maximum versatility in field deployment.
 
 ### Summary Statistics
 
 | Metric | Value |
 |--------|-------|
-| **Lines of Code** | 6,587+ |
-| **Modules** | 5 complete forensics modules |
-| **Files Added** | 34 new files |
-| **Documentation** | 4 comprehensive guides (1,439 lines) |
-| **API Endpoints** | 15+ REST endpoints |
-| **Web Pages** | 1 responsive SPA |
-| **Services** | 2 systemd services |
-| **Scripts** | 4 bash scripts |
+| **Python Code** | 3,115+ lines |
+| **Total Files** | 40 files |
+| **Forensics Modules** | 6 complete modules |
+| **Documentation** | 5 comprehensive guides |
+| **API Endpoints** | 20+ REST endpoints |
+| **Web Interface** | Touch-optimized responsive SPA |
+| **Systemd Services** | 3 services (CLI, GUI, USB) |
+| **Installation Scripts** | 6 bash scripts |
 
 ### What This PR Delivers
 
-1. **Complete Forensics Platform** - 5 major modules covering all forensics domains
-2. **Dual Interface** - CLI for automation, GUI for interactive use
-3. **Field-Ready** - Kiosk mode for portable forensics devices
-4. **Production Quality** - Error handling, logging, documentation
-5. **Easy Deployment** - One-command installation
-6. **Extensible Architecture** - Modular design for future enhancements
+1. **Complete Forensics Platform** - 6 major modules covering all forensics domains
+2. **Triple Interface** - CLI, Web GUI, and USB Gadget modes
+3. **Field-Ready** - Kiosk mode and USB gadget for portable deployment
+4. **USB Plug-and-Play** - Direct connection to target PCs via USB
+5. **Production Quality** - Error handling, logging, comprehensive documentation
+6. **Easy Deployment** - One-command installation
+7. **Extensible Architecture** - Modular design for future enhancements
+
+### Deployment Modes
+
+- **Standalone Device** - With onboard display, runs full GUI in kiosk mode
+- **Network Accessible** - Web GUI accessible from any browser
+- **USB Peripheral** - Plugs into target PC, appears as USB Ethernet adapter
 
 ---
 
-**This PR transforms an empty repository into a fully-functional, professional-grade digital forensics suite ready for real-world deployment.** 🎯
+**This PR transforms an empty repository into a fully-functional, professional-grade digital forensics suite with three distinct deployment modes, ready for real-world field operations.** 🎯
