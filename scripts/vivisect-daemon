@@ -1,0 +1,52 @@
+#!/bin/bash
+# Vivisect Daemon Script
+# Manages the Vivisect forensics suite background service
+
+VIVISECT_HOME="/opt/vivisect"
+VIVISECT_BIN="${VIVISECT_HOME}/src/main.py"
+VIVISECT_LOG="/var/log/vivisect/daemon.log"
+VIVISECT_PID="/var/run/vivisect.pid"
+
+# Ensure log directory exists
+mkdir -p /var/log/vivisect
+mkdir -p /var/lib/vivisect/output
+
+case "$1" in
+    start)
+        echo "Starting Vivisect Forensics Suite..."
+        echo "$(date): Vivisect started" >> "$VIVISECT_LOG"
+
+        # Perform initial system analysis
+        python3 "$VIVISECT_BIN" memory live >> "$VIVISECT_LOG" 2>&1
+        python3 "$VIVISECT_BIN" artifact netconfig >> "$VIVISECT_LOG" 2>&1
+
+        echo "Vivisect initialized and ready"
+        ;;
+
+    stop)
+        echo "Stopping Vivisect Forensics Suite..."
+        echo "$(date): Vivisect stopped" >> "$VIVISECT_LOG"
+        ;;
+
+    status)
+        if [ -f "$VIVISECT_PID" ]; then
+            echo "Vivisect is running (PID: $(cat $VIVISECT_PID))"
+        else
+            echo "Vivisect is not running"
+        fi
+        ;;
+
+    collect)
+        # Run full forensics collection
+        CASE_ID="auto_$(date +%Y%m%d_%H%M%S)"
+        echo "Running forensics collection: $CASE_ID"
+        python3 "$VIVISECT_BIN" collect "$CASE_ID" >> "$VIVISECT_LOG" 2>&1
+        ;;
+
+    *)
+        echo "Usage: $0 {start|stop|status|collect}"
+        exit 1
+        ;;
+esac
+
+exit 0

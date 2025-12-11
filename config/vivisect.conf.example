@@ -1,0 +1,33 @@
+{
+    "output_dir": "/var/lib/vivisect/output",
+    "log_dir": "/var/log/vivisect",
+    "temp_dir": "/tmp/vivisect",
+    "auto_start": true,
+    "modules": {
+        "disk_imaging": {
+            "enabled": true,
+            "compression": true,
+            "hash_algorithm": "sha256"
+        },
+        "file_analysis": {
+            "enabled": true,
+            "scan_depth": 10,
+            "calculate_hashes": true
+        },
+        "network_forensics": {
+            "enabled": true,
+            "capture_interface": "eth0",
+            "max_capture_size": "1GB"
+        },
+        "memory_analysis": {
+            "enabled": true,
+            "auto_dump": false
+        },
+        "artifact_extraction": {
+            "enabled": true,
+            "browser_artifacts": true,
+            "registry_artifacts": true,
+            "system_logs": true
+        }
+    }
+}
