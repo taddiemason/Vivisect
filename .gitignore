@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Forensics output
+output/
+*.pcap
+*.raw
+*.img
+*.dd
+*.E01
+*.000
+carved_files/
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+/tmp/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config (sensitive)
+*.conf
+!*.conf.example
+
+# Evidence files (don't commit actual evidence!)
+evidence/
+cases/
+memory_dumps/
+disk_images/
