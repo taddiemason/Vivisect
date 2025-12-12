@@ -358,6 +358,43 @@ def create_app():
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
+    @app.route('/api/usb/multifunction-status')
+    def multifunction_status():
+        """Get multi-function gadget status (network + storage + serial)"""
+        try:
+            status = usb_gadget.get_multifunction_status()
+            return jsonify(status)
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/usb/mass-storage/sync', methods=['POST'])
+    def sync_mass_storage():
+        """Sync reports to USB mass storage"""
+        try:
+            def run_sync():
+                result = usb_gadget.sync_reports_to_storage()
+                socketio.emit('task_complete', {
+                    'task': 'mass_storage_sync',
+                    'result': result
+                })
+
+            task_id = f"mass_storage_sync_{datetime.now().timestamp()}"
+            active_tasks[task_id] = threading.Thread(target=run_sync)
+            active_tasks[task_id].start()
+
+            return jsonify({'task_id': task_id, 'status': 'started'})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/usb/serial-info')
+    def serial_console_info():
+        """Get serial console information"""
+        try:
+            info = usb_gadget.get_serial_console_info()
+            return jsonify(info)
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
     @app.route('/api/usb/configure', methods=['POST'])
     def configure_usb_network():
         """Configure USB network interface"""
