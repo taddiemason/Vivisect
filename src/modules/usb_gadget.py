@@ -17,6 +17,12 @@ class USBGadget:
         self.host_ip = '10.55.0.1'
         self.device_ip = '10.55.0.2'
 
+        # Multi-function mode settings
+        self.mass_storage_file = '/var/lib/vivisect/usb_storage.img'
+        self.mass_storage_mount = '/mnt/vivisect_usb'
+        self.serial_device = '/dev/ttyGS0'
+        self.gadget_mode = 'multi'  # 'ether', 'multi', 'serial', 'mass_storage'
+
     def is_gadget_enabled(self) -> bool:
         """Check if USB gadget mode is enabled"""
         try:
@@ -329,4 +335,286 @@ class USBGadget:
 
         except Exception as e:
             self.logger.error(f"Failed to get gadget status: {e}")
+            return {'error': str(e)}
+
+    # ==================== Multi-Function Mode Support ====================
+
+    def is_mass_storage_available(self) -> bool:
+        """Check if mass storage gadget is available"""
+        try:
+            # Check if backing file exists
+            if not os.path.exists(self.mass_storage_file):
+                return False
+
+            # Check if mass storage is exposed via g_multi or g_mass_storage
+            result = subprocess.run(
+                ['lsmod'],
+                capture_output=True,
+                text=True
+            )
+
+            return 'g_multi' in result.stdout or 'g_mass_storage' in result.stdout
+
+        except Exception as e:
+            self.logger.error(f"Failed to check mass storage: {e}")
+            return False
+
+    def is_serial_available(self) -> bool:
+        """Check if serial console is available"""
+        try:
+            # Check if serial device exists
+            return os.path.exists(self.serial_device)
+        except Exception as e:
+            self.logger.error(f"Failed to check serial console: {e}")
+            return False
+
+    def create_mass_storage_image(self, size_mb: int = 512, filesystem: str = 'vfat') -> Dict[str, Any]:
+        """Create a mass storage backing file for reports/evidence"""
+        self.logger.info(f"Creating {size_mb}MB mass storage image")
+
+        try:
+            # Create directory if needed
+            storage_dir = os.path.dirname(self.mass_storage_file)
+            os.makedirs(storage_dir, exist_ok=True)
+            os.makedirs(self.mass_storage_mount, exist_ok=True)
+
+            # Create sparse file
+            self.logger.info(f"Creating backing file: {self.mass_storage_file}")
+            result = subprocess.run(
+                ['dd', 'if=/dev/zero', f'of={self.mass_storage_file}',
+                 'bs=1M', f'count={size_mb}', 'status=progress'],
+                capture_output=True,
+                text=True,
+                timeout=300
+            )
+
+            if result.returncode != 0:
+                raise Exception(f"Failed to create backing file: {result.stderr}")
+
+            # Format with filesystem
+            self.logger.info(f"Formatting with {filesystem}")
+            if filesystem == 'vfat':
+                mkfs_cmd = ['mkfs.vfat', '-n', 'VIVISECT', self.mass_storage_file]
+            elif filesystem == 'ext4':
+                mkfs_cmd = ['mkfs.ext4', '-L', 'VIVISECT', '-F', self.mass_storage_file]
+            else:
+                raise Exception(f"Unsupported filesystem: {filesystem}")
+
+            result = subprocess.run(mkfs_cmd, capture_output=True, text=True, timeout=60)
+
+            if result.returncode != 0:
+                raise Exception(f"Failed to format: {result.stderr}")
+
+            self.logger.info("Mass storage image created successfully")
+
+            return {
+                'success': True,
+                'file': self.mass_storage_file,
+                'size_mb': size_mb,
+                'filesystem': filesystem,
+                'mount_point': self.mass_storage_mount
+            }
+
+        except Exception as e:
+            self.logger.error(f"Mass storage creation failed: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def mount_mass_storage(self) -> Dict[str, Any]:
+        """Mount mass storage image for writing reports"""
+        self.logger.info("Mounting mass storage image")
+
+        try:
+            if not os.path.exists(self.mass_storage_file):
+                return {'success': False, 'error': 'Mass storage image does not exist'}
+
+            # Create mount point
+            os.makedirs(self.mass_storage_mount, exist_ok=True)
+
+            # Mount the image
+            result = subprocess.run(
+                ['mount', '-o', 'loop', self.mass_storage_file, self.mass_storage_mount],
+                capture_output=True,
+                text=True
+            )
+
+            if result.returncode != 0:
+                raise Exception(f"Mount failed: {result.stderr}")
+
+            self.logger.info(f"Mounted at {self.mass_storage_mount}")
+
+            return {
+                'success': True,
+                'mount_point': self.mass_storage_mount,
+                'backing_file': self.mass_storage_file
+            }
+
+        except Exception as e:
+            self.logger.error(f"Mount failed: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def unmount_mass_storage(self) -> Dict[str, Any]:
+        """Unmount mass storage image"""
+        self.logger.info("Unmounting mass storage image")
+
+        try:
+            result = subprocess.run(
+                ['umount', self.mass_storage_mount],
+                capture_output=True,
+                text=True
+            )
+
+            if result.returncode != 0:
+                self.logger.warning(f"Unmount warning: {result.stderr}")
+
+            return {'success': True}
+
+        except Exception as e:
+            self.logger.error(f"Unmount failed: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def sync_reports_to_storage(self) -> Dict[str, Any]:
+        """Sync reports and evidence to mass storage"""
+        self.logger.info("Syncing reports to USB mass storage")
+
+        try:
+            # Mount storage
+            mount_result = self.mount_mass_storage()
+            if not mount_result.get('success'):
+                return mount_result
+
+            # Copy reports
+            reports_dir = os.path.join(self.output_dir, 'reports')
+            if os.path.exists(reports_dir):
+                self.logger.info(f"Copying reports from {reports_dir}")
+                result = subprocess.run(
+                    ['rsync', '-av', '--update', f'{reports_dir}/',
+                     f'{self.mass_storage_mount}/reports/'],
+                    capture_output=True,
+                    text=True,
+                    timeout=300
+                )
+
+                if result.returncode != 0:
+                    self.logger.warning(f"Rsync warning: {result.stderr}")
+
+            # Copy evidence metadata
+            evidence_dir = os.path.join(self.output_dir, 'evidence')
+            if os.path.exists(evidence_dir):
+                self.logger.info(f"Copying evidence metadata from {evidence_dir}")
+                result = subprocess.run(
+                    ['rsync', '-av', '--update', '--exclude', '*.img', '--exclude', '*.dd',
+                     f'{evidence_dir}/', f'{self.mass_storage_mount}/evidence/'],
+                    capture_output=True,
+                    text=True,
+                    timeout=300
+                )
+
+            # Sync filesystem
+            subprocess.run(['sync'], timeout=30)
+
+            # Unmount
+            self.unmount_mass_storage()
+
+            self.logger.info("Reports synced successfully")
+
+            return {
+                'success': True,
+                'synced_dirs': ['reports', 'evidence'],
+                'mount_point': self.mass_storage_mount
+            }
+
+        except Exception as e:
+            self.logger.error(f"Sync failed: {e}")
+            # Try to unmount anyway
+            try:
+                self.unmount_mass_storage()
+            except:
+                pass
+            return {'success': False, 'error': str(e)}
+
+    def get_serial_console_info(self) -> Dict[str, Any]:
+        """Get serial console information"""
+        try:
+            info = {
+                'available': self.is_serial_available(),
+                'device': self.serial_device,
+                'baud_rate': 115200
+            }
+
+            if info['available']:
+                # Check if anything is connected
+                result = subprocess.run(
+                    ['stty', '-F', self.serial_device],
+                    capture_output=True,
+                    text=True
+                )
+                if result.returncode == 0:
+                    info['settings'] = result.stdout.strip()
+
+            return info
+
+        except Exception as e:
+            self.logger.error(f"Failed to get serial info: {e}")
+            return {'error': str(e)}
+
+    def get_multifunction_status(self) -> Dict[str, Any]:
+        """Get comprehensive multi-function gadget status"""
+        try:
+            status = {
+                'mode': self.gadget_mode,
+                'timestamp': datetime.now().isoformat(),
+                'functions': {
+                    'network': {
+                        'enabled': self.is_gadget_enabled(),
+                        'connected': self.is_connected_to_host(),
+                        'interface': self.gadget_interface,
+                        'device_ip': self.device_ip,
+                        'host_ip': self.host_ip
+                    },
+                    'mass_storage': {
+                        'available': self.is_mass_storage_available(),
+                        'backing_file': self.mass_storage_file,
+                        'backing_file_exists': os.path.exists(self.mass_storage_file),
+                        'mount_point': self.mass_storage_mount
+                    },
+                    'serial': {
+                        'available': self.is_serial_available(),
+                        'device': self.serial_device
+                    }
+                }
+            }
+
+            # Get backing file size if it exists
+            if status['functions']['mass_storage']['backing_file_exists']:
+                try:
+                    size_bytes = os.path.getsize(self.mass_storage_file)
+                    status['functions']['mass_storage']['size_mb'] = size_bytes // (1024 * 1024)
+                except:
+                    pass
+
+            # Check what's actually loaded
+            result = subprocess.run(['lsmod'], capture_output=True, text=True)
+            loaded_modules = []
+            for line in result.stdout.split('\n'):
+                if any(mod in line for mod in ['g_ether', 'g_multi', 'g_serial', 'g_mass_storage', 'usb_f_', 'dwc2']):
+                    loaded_modules.append(line.split()[0])
+
+            status['loaded_modules'] = loaded_modules
+
+            # Determine actual mode based on loaded modules
+            if 'g_multi' in loaded_modules:
+                status['active_mode'] = 'multi-function'
+            elif 'g_ether' in loaded_modules:
+                status['active_mode'] = 'network-only'
+            elif 'g_serial' in loaded_modules:
+                status['active_mode'] = 'serial-only'
+            elif 'g_mass_storage' in loaded_modules:
+                status['active_mode'] = 'mass-storage-only'
+            else:
+                status['active_mode'] = 'none'
+
+            return status
+
+        except Exception as e:
+            self.logger.error(f"Failed to get multi-function status: {e}")
             return {'error': str(e)}

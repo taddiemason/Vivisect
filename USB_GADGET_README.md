@@ -2,37 +2,50 @@
 
 ## Overview
 
-USB Gadget Mode allows your Vivisect device (especially Raspberry Pi Zero/4) to act as a **USB peripheral** that plugs directly into a target PC. When connected, it appears as a USB Ethernet adapter and automatically captures network traffic and performs forensics collection.
+USB Gadget Mode allows your Vivisect device (especially Raspberry Pi Zero/4) to act as a **USB peripheral** that plugs directly into a target PC. Using **Multi-Function Gadget Mode (g_multi)**, it presents three simultaneous USB devices to the host:
+
+1. **USB Ethernet** - Network interface for traffic capture
+2. **USB Mass Storage** - Drive for accessing reports/evidence
+3. **USB Serial Console** - Terminal access for CLI control
 
 ## 🎯 What It Does
 
 ```
-┌─────────────────────────┐
-│   Target PC             │
-│                         │
-│   USB Port ──────────┐  │
-└───────────────────────┼──┘
-                        │ USB Cable
-                        │
-                   ┌────▼────────────────────┐
-                   │  Vivisect Device        │
-                   │  (Raspberry Pi Zero)    │
-                   │                         │
-                   │  ✅ Appears as USB Eth │
-                   │  ✅ Captures traffic    │
-                   │  ✅ Auto-collects data  │
-                   │  ✅ Logs everything     │
-                   └─────────────────────────┘
+┌─────────────────────────────────────────┐
+│   Target PC                             │
+│                                         │
+│   USB Port ──────────────────────────┐  │
+└───────────────────────────────────────┼──┘
+                                        │ USB Cable
+                                        │
+                   ┌────────────────────▼─────────────────────┐
+                   │  Vivisect Device (Raspberry Pi Zero)     │
+                   │                                          │
+                   │  ✅ USB Ethernet Adapter (usb0)         │
+                   │     - Captures network traffic          │
+                   │     - IP: 10.55.0.2                     │
+                   │                                          │
+                   │  💾 USB Mass Storage (512MB)            │
+                   │     - Reports & evidence access         │
+                   │     - Auto-synced                       │
+                   │                                          │
+                   │  ⌨️  USB Serial Console (/dev/ttyGS0)   │
+                   │     - CLI access (115200 baud)          │
+                   │     - Remote control                    │
+                   └──────────────────────────────────────────┘
 ```
 
 ### When You Plug In:
 
-1. **PC detects "USB Ethernet Adapter"**
-2. **PC gets IP address** (10.55.0.10-20)
-3. **Vivisect starts packet capture** automatically
-4. **All network traffic** is logged
-5. **Forensics collection** begins
-6. **GUI shows "Connected to Host PC"**
+1. **PC detects THREE USB devices:**
+   - USB Ethernet Adapter (network interface)
+   - USB Mass Storage Drive ("VIVISECT" 512MB)
+   - USB Serial Console (COM port)
+2. **Network configured automatically** (PC gets IP 10.55.0.10-20)
+3. **Packet capture starts** on USB network interface
+4. **Mass storage** shows reports and evidence
+5. **Serial console** provides CLI access (screen/PuTTY)
+6. **GUI shows "Connected to Host PC"** with function status
 
 ---
 
@@ -53,17 +66,34 @@ sudo ./scripts/setup-usb-gadget.sh
 ```
 
 The script will:
-- Configure boot files (`config.txt`, `cmdline.txt`)
-- Set up USB Ethernet (`usb0` interface)
-- Configure DHCP server
+- Configure boot files (`config.txt`, `cmdline.txt`) for dwc2 driver
+- Set up **g_multi** kernel module for multi-function mode
+- Create 512MB mass storage backing file (FAT32)
+- Configure USB Ethernet (`usb0` interface)
+- Configure DHCP server (10.55.0.10-20 range)
 - Enable IP forwarding and NAT
 - Install monitoring service
-- Set up auto-capture
+- Set up auto-capture and sync scripts
 
 **IMPORTANT: You MUST reboot after installation!**
 
 ```bash
 sudo reboot
+```
+
+After reboot, verify all functions are active:
+```bash
+# Check loaded modules
+lsmod | grep g_multi
+
+# Check network interface
+ip addr show usb0
+
+# Check mass storage
+ls -lh /var/lib/vivisect/usb_storage.img
+
+# Check serial device
+ls -l /dev/ttyGS0
 ```
 
 ---
@@ -122,6 +152,108 @@ pgrep tcpdump
 
 # Stop it
 sudo kill $(cat /var/run/usb-capture.pid)
+```
+
+---
+
+## 🔧 Multi-Function Features
+
+### USB Mass Storage
+
+The device presents a 512MB FAT32 USB drive to the host PC containing forensics reports and evidence.
+
+**On Host PC (Windows):**
+- Drive appears as "VIVISECT (E:)" or similar
+- Browse reports and evidence directly
+- Read-only for forensics integrity (configurable)
+
+**On Host PC (Linux/Mac):**
+```bash
+# Drive auto-mounts to /media/VIVISECT or similar
+ls /media/VIVISECT/
+
+# Manual mount if needed
+sudo mount /dev/sdb1 /mnt/vivisect
+```
+
+**Sync Reports to USB Storage:**
+```bash
+# On Vivisect device
+sudo /home/user/Vivisect/scripts/usb-storage-sync.sh
+
+# This copies:
+# - /var/lib/vivisect/output/reports → USB:/reports/
+# - /var/lib/vivisect/output/evidence → USB:/evidence/
+# - Recent logs → USB:/logs/
+```
+
+**Auto-Sync:**
+Reports are automatically synced to USB storage when:
+- New reports are generated
+- USB connection is established
+- Manual sync is triggered via GUI
+
+### USB Serial Console
+
+Access the Vivisect CLI directly via USB serial connection (no network needed).
+
+**On Host PC (Linux/Mac):**
+```bash
+# Find serial device
+ls /dev/ttyACM*
+
+# Connect with screen (115200 baud)
+screen /dev/ttyACM0 115200
+
+# Or with minicom
+sudo minicom -D /dev/ttyACM0 -b 115200
+
+# Exit screen: Ctrl+A then K
+```
+
+**On Host PC (Windows):**
+1. Device Manager → Ports (COM & LPT)
+2. Find "USB Serial Device (COM3)" or similar
+3. Use PuTTY:
+   - Connection type: Serial
+   - Serial line: COM3
+   - Speed: 115200
+
+**Serial Console Usage:**
+```bash
+# Login (if prompted)
+# Then use Vivisect CLI
+
+vivisect disk --list
+vivisect network --capture-live eth0
+vivisect collect --all
+```
+
+**Enable Getty on Serial (if needed):**
+```bash
+# On Vivisect device
+sudo systemctl enable serial-getty@ttyGS0.service
+sudo systemctl start serial-getty@ttyGS0.service
+```
+
+### Combining All Three Functions
+
+Example workflow using all USB functions simultaneously:
+
+1. **Network (usb0):** Captures target PC's network traffic
+2. **Mass Storage:** Access captured reports without SSH/network config
+3. **Serial Console:** Control Vivisect and trigger collection
+
+```bash
+# On Host PC via serial console (screen /dev/ttyACM0 115200):
+vivisect network --capture-live usb0 --duration 300
+
+# While that runs, on Host PC:
+# - Check network: ping 10.55.0.2
+# - View live reports: ls /media/VIVISECT/reports/
+# - Monitor traffic in real-time
+
+# All simultaneously!
 ```
 
 ---

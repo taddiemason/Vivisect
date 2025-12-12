@@ -82,6 +82,63 @@ function loadSystemStatus() {
             console.error('Error loading status:', error);
             updateStatusIndicator('error');
         });
+
+    // Load multi-function USB status
+    loadMultiFunctionStatus();
+}
+
+function loadMultiFunctionStatus() {
+    fetch('/api/usb/multifunction-status')
+        .then(response => response.json())
+        .then(data => {
+            if (!data.error && data.functions) {
+                // Update network status
+                const networkStatus = document.getElementById('usb-network-status');
+                if (networkStatus) {
+                    if (data.functions.network.connected) {
+                        networkStatus.innerHTML = '✅ Network Active';
+                        networkStatus.style.color = '#10b981';
+                    } else {
+                        networkStatus.innerHTML = '⭕ Network Inactive';
+                        networkStatus.style.color = '#64748b';
+                    }
+                }
+
+                // Update mass storage status
+                const storageStatus = document.getElementById('usb-storage-status');
+                if (storageStatus) {
+                    if (data.functions.mass_storage.available) {
+                        const sizeMB = data.functions.mass_storage.size_mb || 0;
+                        storageStatus.innerHTML = `💾 Storage (${sizeMB}MB)`;
+                        storageStatus.style.color = '#10b981';
+                    } else {
+                        storageStatus.innerHTML = '💾 Storage Not Available';
+                        storageStatus.style.color = '#64748b';
+                    }
+                }
+
+                // Update serial status
+                const serialStatus = document.getElementById('usb-serial-status');
+                if (serialStatus) {
+                    if (data.functions.serial.available) {
+                        serialStatus.innerHTML = '⌨️ Serial Console';
+                        serialStatus.style.color = '#10b981';
+                    } else {
+                        serialStatus.innerHTML = '⌨️ Serial Inactive';
+                        serialStatus.style.color = '#64748b';
+                    }
+                }
+
+                // Update mode indicator
+                const modeIndicator = document.getElementById('usb-mode');
+                if (modeIndicator) {
+                    modeIndicator.textContent = data.active_mode || data.mode || 'Unknown';
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error loading multi-function status:', error);
+        });
 }
 
 function updateStatusIndicator(status) {
