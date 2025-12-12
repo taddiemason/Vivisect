@@ -395,6 +395,39 @@ def create_app():
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
+    @app.route('/api/usb/mode/switch', methods=['POST'])
+    def switch_usb_mode():
+        """Switch USB gadget mode"""
+        try:
+            data = request.json or {}
+            mode = data.get('mode')  # 'multi', 'mass_storage', 'ether'
+            read_only = data.get('read_only', False)
+
+            if mode == 'multi':
+                result = usb_gadget.switch_to_multi_function()
+            elif mode == 'mass_storage':
+                result = usb_gadget.switch_to_mass_storage_only(read_only=read_only)
+            elif mode == 'ether' or mode == 'network':
+                result = usb_gadget.switch_to_network_only()
+            else:
+                return jsonify({'error': f'Invalid mode: {mode}'}), 400
+
+            return jsonify(result)
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/usb/mode/current')
+    def get_current_mode():
+        """Get current USB gadget mode"""
+        try:
+            mode = usb_gadget.get_current_mode()
+            return jsonify({
+                'mode': mode,
+                'timestamp': datetime.now().isoformat()
+            })
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
     @app.route('/api/usb/configure', methods=['POST'])
     def configure_usb_network():
         """Configure USB network interface"""

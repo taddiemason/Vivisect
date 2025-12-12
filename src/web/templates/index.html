@@ -88,6 +88,23 @@
                     </button>
                 </div>
 
+                <div class="card">
+                    <h2>USB Gadget Mode</h2>
+                    <p style="font-size: 0.9em; color: #64748b; margin-bottom: 15px;">Switch between different USB modes</p>
+                    <button class="btn btn-secondary" onclick="switchUSBMode('multi')">
+                        🔧 Multi-Function
+                    </button>
+                    <button class="btn btn-secondary" onclick="switchUSBMode('mass_storage')">
+                        💾 USB Drive (RW)
+                    </button>
+                    <button class="btn btn-secondary" onclick="switchUSBMode('mass_storage_ro')">
+                        🔒 USB Drive (RO)
+                    </button>
+                    <button class="btn btn-secondary" onclick="switchUSBMode('network')">
+                        🌐 Network Only
+                    </button>
+                </div>
+
                 <div class="card full-width">
                     <h2>Activity Log</h2>
                     <div id="activity-log" class="log-display"></div>

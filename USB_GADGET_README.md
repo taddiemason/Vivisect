@@ -258,6 +258,128 @@ vivisect network --capture-live usb0 --duration 300
 
 ---
 
+## 🔄 Mode Switching
+
+Vivisect supports switching between different USB gadget modes without rebooting. Choose the mode that best fits your workflow.
+
+### Available Modes
+
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| **Multi-Function** | Network + Storage + Serial | Full forensics suite, maximum flexibility |
+| **Mass Storage (RW)** | USB flash drive (read-write) | Quick evidence handoff, report sharing |
+| **Mass Storage (RO)** | USB flash drive (read-only) | Forensically sound evidence presentation |
+| **Network Only** | USB Ethernet adapter | Network traffic capture only |
+
+### Switch Via Command Line
+
+Use the `usb-mode-switch.sh` script:
+
+```bash
+# Show current mode
+sudo /path/to/Vivisect/scripts/usb-mode-switch.sh status
+
+# Switch to multi-function mode (default)
+sudo /path/to/Vivisect/scripts/usb-mode-switch.sh multi
+
+# Switch to USB flash drive (read-write)
+sudo /path/to/Vivisect/scripts/usb-mode-switch.sh storage
+
+# Switch to USB flash drive (read-only for forensics)
+sudo /path/to/Vivisect/scripts/usb-mode-switch.sh storage-ro
+
+# Switch to network only
+sudo /path/to/Vivisect/scripts/usb-mode-switch.sh network
+```
+
+### Switch Via Web GUI
+
+1. Open Vivisect GUI in browser
+2. Navigate to **Dashboard**
+3. Find **USB Gadget Mode** card
+4. Click desired mode button:
+   - **🔧 Multi-Function** - All three functions
+   - **💾 USB Drive (RW)** - Flash drive read-write
+   - **🔒 USB Drive (RO)** - Flash drive read-only
+   - **🌐 Network Only** - USB Ethernet
+
+Mode switches take 2-5 seconds. The host PC will see a brief disconnect/reconnect.
+
+### Mass Storage Only Mode
+
+**Best for:**
+- Quick evidence handoff to another investigator
+- Presenting reports to non-technical users
+- Universal compatibility (works on any OS)
+- No network configuration needed
+
+**Read-Write Mode:**
+```bash
+sudo ./scripts/usb-mode-switch.sh storage
+```
+- Host PC can read AND write to the drive
+- Useful for collecting additional evidence
+- Drive labeled "VIVISECT"
+
+**Read-Only Mode (Recommended for evidence):**
+```bash
+sudo ./scripts/usb-mode-switch.sh storage-ro
+```
+- Host PC can ONLY read from the drive
+- Preserves forensic integrity
+- Prevents accidental modification
+- Write-blocker functionality
+
+**Sync Reports Before Switching:**
+```bash
+# Sync latest reports to USB storage
+sudo ./scripts/usb-storage-sync.sh
+
+# Then switch to mass storage only
+sudo ./scripts/usb-mode-switch.sh storage-ro
+```
+
+**On Host PC:**
+
+Windows:
+- Drive appears as new drive letter (E:, F:, etc.)
+- Browse normally via File Explorer
+- Reports in `E:\reports\`
+- Evidence in `E:\evidence\`
+
+Linux:
+- Auto-mounts to `/media/VIVISECT/`
+- Or manually: `sudo mount /dev/sdb1 /mnt`
+
+Mac:
+- Auto-mounts to `/Volumes/VIVISECT/`
+- Appears in Finder
+
+### When to Use Each Mode
+
+**Multi-Function Mode:**
+- Active forensics collection
+- Need all capabilities simultaneously
+- Advanced users with proper drivers
+
+**Mass Storage (Read-Only):**
+- Evidence handoff
+- Court proceedings
+- Forensically sound presentation
+- Prevent tampering
+
+**Mass Storage (Read-Write):**
+- Collecting files from host PC
+- Collaborative investigation
+- Adding external evidence
+
+**Network Only:**
+- Pure traffic capture
+- Minimal footprint
+- Host PC only sees network adapter
+
+---
+
 ## 📊 Configuration
 
 ### Network Configuration

@@ -618,3 +618,207 @@ class USBGadget:
         except Exception as e:
             self.logger.error(f"Failed to get multi-function status: {e}")
             return {'error': str(e)}
+
+    # ==================== Mode Switching ====================
+
+    def switch_to_mass_storage_only(self, read_only: bool = False) -> Dict[str, Any]:
+        """Switch to mass-storage-only mode (USB flash drive)"""
+        self.logger.info(f"Switching to mass-storage-only mode (read_only={read_only})")
+
+        try:
+            # Unload current gadget modules
+            unload_result = self._unload_gadget_modules()
+            if not unload_result['success']:
+                return unload_result
+
+            # Ensure backing file exists
+            if not os.path.exists(self.mass_storage_file):
+                create_result = self.create_mass_storage_image()
+                if not create_result.get('success'):
+                    return create_result
+
+            # Load g_mass_storage module
+            ro_flag = '1' if read_only else '0'
+            modprobe_cmd = [
+                'modprobe', 'g_mass_storage',
+                f'file={self.mass_storage_file}',
+                f'removable=1',
+                f'ro={ro_flag}',
+                f'stall=0',
+                'iSerialNumber=VIVISECT001',
+                'iManufacturer=Vivisect',
+                'iProduct=Forensics Evidence Drive'
+            ]
+
+            self.logger.info(f"Loading g_mass_storage: {' '.join(modprobe_cmd)}")
+            result = subprocess.run(modprobe_cmd, capture_output=True, text=True, timeout=10)
+
+            if result.returncode != 0:
+                raise Exception(f"Failed to load g_mass_storage: {result.stderr}")
+
+            # Update mode
+            self.gadget_mode = 'mass_storage'
+
+            self.logger.info("Switched to mass-storage-only mode successfully")
+
+            return {
+                'success': True,
+                'mode': 'mass_storage',
+                'read_only': read_only,
+                'backing_file': self.mass_storage_file,
+                'message': f'Device now appears as USB flash drive ({"read-only" if read_only else "read-write"})'
+            }
+
+        except Exception as e:
+            self.logger.error(f"Failed to switch to mass-storage-only mode: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def switch_to_multi_function(self) -> Dict[str, Any]:
+        """Switch to multi-function mode (network + storage + serial)"""
+        self.logger.info("Switching to multi-function mode")
+
+        try:
+            # Unload current gadget modules
+            unload_result = self._unload_gadget_modules()
+            if not unload_result['success']:
+                return unload_result
+
+            # Ensure backing file exists
+            if not os.path.exists(self.mass_storage_file):
+                create_result = self.create_mass_storage_image()
+                if not create_result.get('success'):
+                    return create_result
+
+            # Load g_multi module
+            modprobe_cmd = [
+                'modprobe', 'g_multi',
+                f'file={self.mass_storage_file}',
+                'removable=1',
+                'ro=0',
+                'stall=0',
+                'iSerialNumber=VIVISECT001',
+                'iManufacturer=Vivisect',
+                'iProduct=Forensics Suite'
+            ]
+
+            self.logger.info(f"Loading g_multi: {' '.join(modprobe_cmd)}")
+            result = subprocess.run(modprobe_cmd, capture_output=True, text=True, timeout=10)
+
+            if result.returncode != 0:
+                raise Exception(f"Failed to load g_multi: {result.stderr}")
+
+            # Update mode
+            self.gadget_mode = 'multi'
+
+            # Wait for interfaces to come up
+            time.sleep(2)
+
+            # Configure network if available
+            if self.is_gadget_enabled():
+                self.configure_network()
+
+            self.logger.info("Switched to multi-function mode successfully")
+
+            return {
+                'success': True,
+                'mode': 'multi',
+                'functions': ['network', 'mass_storage', 'serial'],
+                'message': 'Device now provides network, mass storage, and serial console'
+            }
+
+        except Exception as e:
+            self.logger.error(f"Failed to switch to multi-function mode: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def switch_to_network_only(self) -> Dict[str, Any]:
+        """Switch to network-only mode (USB Ethernet)"""
+        self.logger.info("Switching to network-only mode")
+
+        try:
+            # Unload current gadget modules
+            unload_result = self._unload_gadget_modules()
+            if not unload_result['success']:
+                return unload_result
+
+            # Load g_ether module
+            modprobe_cmd = [
+                'modprobe', 'g_ether',
+                'iSerialNumber=VIVISECT001',
+                'iManufacturer=Vivisect',
+                'iProduct=Forensics Network Adapter'
+            ]
+
+            self.logger.info(f"Loading g_ether: {' '.join(modprobe_cmd)}")
+            result = subprocess.run(modprobe_cmd, capture_output=True, text=True, timeout=10)
+
+            if result.returncode != 0:
+                raise Exception(f"Failed to load g_ether: {result.stderr}")
+
+            # Update mode
+            self.gadget_mode = 'ether'
+
+            # Wait for interface to come up
+            time.sleep(2)
+
+            # Configure network
+            self.configure_network()
+
+            self.logger.info("Switched to network-only mode successfully")
+
+            return {
+                'success': True,
+                'mode': 'ether',
+                'functions': ['network'],
+                'message': 'Device now appears as USB Ethernet adapter'
+            }
+
+        except Exception as e:
+            self.logger.error(f"Failed to switch to network-only mode: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def _unload_gadget_modules(self) -> Dict[str, Any]:
+        """Unload all USB gadget modules"""
+        self.logger.info("Unloading USB gadget modules")
+
+        try:
+            modules_to_unload = ['g_multi', 'g_ether', 'g_serial', 'g_mass_storage']
+
+            for module in modules_to_unload:
+                result = subprocess.run(
+                    ['modprobe', '-r', module],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                # Don't fail if module wasn't loaded
+                if result.returncode == 0:
+                    self.logger.info(f"Unloaded {module}")
+
+            # Wait for cleanup
+            time.sleep(1)
+
+            return {'success': True}
+
+        except Exception as e:
+            self.logger.error(f"Failed to unload gadget modules: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def get_current_mode(self) -> str:
+        """Get current USB gadget mode"""
+        try:
+            result = subprocess.run(['lsmod'], capture_output=True, text=True)
+
+            if 'g_multi' in result.stdout:
+                return 'multi'
+            elif 'g_ether' in result.stdout:
+                return 'ether'
+            elif 'g_serial' in result.stdout:
+                return 'serial'
+            elif 'g_mass_storage' in result.stdout:
+                return 'mass_storage'
+            else:
+                return 'none'
+
+        except Exception as e:
+            self.logger.error(f"Failed to get current mode: {e}")
+            return 'unknown'

@@ -668,6 +668,54 @@ function downloadReport(filename) {
     log(`Downloading report: ${filename}`, 'success');
 }
 
+// USB Mode Switching Functions
+function switchUSBMode(mode) {
+    const modeNames = {
+        'multi': 'Multi-Function (Network + Storage + Serial)',
+        'mass_storage': 'USB Flash Drive (Read-Write)',
+        'mass_storage_ro': 'USB Flash Drive (Read-Only)',
+        'network': 'Network Only (USB Ethernet)'
+    };
+
+    if (!confirm(`Switch to ${modeNames[mode]}?\n\nThis will disconnect and reconnect the USB device.`)) {
+        return;
+    }
+
+    showProgress(`Switching to ${modeNames[mode]}...`);
+    log(`Switching USB mode to: ${mode}`, 'info');
+
+    const payload = {
+        mode: mode === 'mass_storage_ro' ? 'mass_storage' : mode,
+        read_only: mode === 'mass_storage_ro'
+    };
+
+    fetch('/api/usb/mode/switch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideProgress();
+        if (data.error) {
+            alert('Error switching mode: ' + data.error);
+            log('USB mode switch failed', 'error');
+        } else if (data.success) {
+            log(data.message || 'USB mode switched successfully', 'success');
+            // Reload status after mode switch
+            setTimeout(loadSystemStatus, 2000);
+        } else {
+            alert('Mode switch failed');
+            log('USB mode switch failed', 'error');
+        }
+    })
+    .catch(error => {
+        hideProgress();
+        alert('Error: ' + error);
+        log('USB mode switch error', 'error');
+    });
+}
+
 // Auto-refresh status every 30 seconds
 setInterval(loadSystemStatus, 30000);
 
