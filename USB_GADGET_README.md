@@ -258,6 +258,128 @@ vivisect network --capture-live usb0 --duration 300
 
 ---
 
+## 🔄 Mode Switching
+
+Vivisect supports switching between different USB gadget modes without rebooting. Choose the mode that best fits your workflow.
+
+### Available Modes
+
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| **Multi-Function** | Network + Storage + Serial | Full forensics suite, maximum flexibility |
+| **Mass Storage (RW)** | USB flash drive (read-write) | Quick evidence handoff, report sharing |
+| **Mass Storage (RO)** | USB flash drive (read-only) | Forensically sound evidence presentation |
+| **Network Only** | USB Ethernet adapter | Network traffic capture only |
+
+### Switch Via Command Line
+
+Use the `usb-mode-switch.sh` script:
+
+```bash
+# Show current mode
+sudo /path/to/Vivisect/scripts/usb-mode-switch.sh status
+
+# Switch to multi-function mode (default)
+sudo /path/to/Vivisect/scripts/usb-mode-switch.sh multi
+
+# Switch to USB flash drive (read-write)
+sudo /path/to/Vivisect/scripts/usb-mode-switch.sh storage
+
+# Switch to USB flash drive (read-only for forensics)
+sudo /path/to/Vivisect/scripts/usb-mode-switch.sh storage-ro
+
+# Switch to network only
+sudo /path/to/Vivisect/scripts/usb-mode-switch.sh network
+```
+
+### Switch Via Web GUI
+
+1. Open Vivisect GUI in browser
+2. Navigate to **Dashboard**
+3. Find **USB Gadget Mode** card
+4. Click desired mode button:
+   - **🔧 Multi-Function** - All three functions
+   - **💾 USB Drive (RW)** - Flash drive read-write
+   - **🔒 USB Drive (RO)** - Flash drive read-only
+   - **🌐 Network Only** - USB Ethernet
+
+Mode switches take 2-5 seconds. The host PC will see a brief disconnect/reconnect.
+
+### Mass Storage Only Mode
+
+**Best for:**
+- Quick evidence handoff to another investigator
+- Presenting reports to non-technical users
+- Universal compatibility (works on any OS)
+- No network configuration needed
+
+**Read-Write Mode:**
+```bash
+sudo ./scripts/usb-mode-switch.sh storage
+```
+- Host PC can read AND write to the drive
+- Useful for collecting additional evidence
+- Drive labeled "VIVISECT"
+
+**Read-Only Mode (Recommended for evidence):**
+```bash
+sudo ./scripts/usb-mode-switch.sh storage-ro
+```
+- Host PC can ONLY read from the drive
+- Preserves forensic integrity
+- Prevents accidental modification
+- Write-blocker functionality
+
+**Sync Reports Before Switching:**
+```bash
+# Sync latest reports to USB storage
+sudo ./scripts/usb-storage-sync.sh
+
+# Then switch to mass storage only
+sudo ./scripts/usb-mode-switch.sh storage-ro
+```
+
+**On Host PC:**
+
+Windows:
+- Drive appears as new drive letter (E:, F:, etc.)
+- Browse normally via File Explorer
+- Reports in `E:\reports\`
+- Evidence in `E:\evidence\`
+
+Linux:
+- Auto-mounts to `/media/VIVISECT/`
+- Or manually: `sudo mount /dev/sdb1 /mnt`
+
+Mac:
+- Auto-mounts to `/Volumes/VIVISECT/`
+- Appears in Finder
+
+### When to Use Each Mode
+
+**Multi-Function Mode:**
+- Active forensics collection
+- Need all capabilities simultaneously
+- Advanced users with proper drivers
+
+**Mass Storage (Read-Only):**
+- Evidence handoff
+- Court proceedings
+- Forensically sound presentation
+- Prevent tampering
+
+**Mass Storage (Read-Write):**
+- Collecting files from host PC
+- Collaborative investigation
+- Adding external evidence
+
+**Network Only:**
+- Pure traffic capture
+- Minimal footprint
+- Host PC only sees network adapter
+
+---
+
 ## 📊 Configuration
 
 ### Network Configuration
@@ -698,6 +820,229 @@ journalctl -u usb-gadget-monitor -f
 - **Main Documentation:** [README.md](README.md)
 - **GUI Guide:** [GUI_README.md](GUI_README.md)
 - **Quick Start:** [QUICKSTART.md](QUICKSTART.md)
+
+---
+
+## ⌨️ HID Keyboard Mode (Advanced - Requires Authorization)
+
+### ⚠️ CRITICAL SECURITY WARNING ⚠️
+
+**HID Keyboard Mode enables automated keystroke injection (BadUSB functionality).**
+
+This feature is ONLY for:
+- ✅ Authorized penetration testing with written permission
+- ✅ Digital forensics and incident response (with authorization)
+- ✅ CTF competitions and security research
+- ✅ Educational purposes on systems you own
+- ✅ Automated forensics triage on authorized systems
+
+**NEVER use HID mode without explicit written authorization.**
+Unauthorized access is illegal and unethical.
+
+### What is HID Mode?
+
+HID (Human Interface Device) mode makes Vivisect appear as a USB keyboard to the host PC. When connected, it can automatically type commands, execute scripts, and perform automated forensics collection without manual intervention.
+
+**Use Cases:**
+- Automated forensics triage scripts
+- Incident response automation
+- Security testing (with permission)
+- CTF competition automation
+- Educational demonstrations
+
+### Setup HID Mode
+
+**Prerequisites:**
+- Raspberry Pi Zero W or Pi 4
+- Explicit authorization for the target system
+- Understanding of legal and ethical implications
+
+**Installation:**
+```bash
+cd /path/to/Vivisect
+sudo ./scripts/setup-usb-hid.sh
+```
+
+During setup, you will be asked to confirm authorization. The setup will:
+1. Configure USB HID keyboard gadget via configfs
+2. Create HID device at `/dev/hidg0`
+3. Set up payload directory
+4. Create example payloads
+5. Log the setup to syslog (for accountability)
+
+**Post-Installation:**
+```bash
+# Verify HID device exists
+ls -l /dev/hidg0
+
+# Check HID gadget is configured
+lsusb  # Should show Vivisect HID Keyboard
+
+# View example payloads
+ls /var/lib/vivisect/hid_payloads/
+```
+
+### Creating HID Payloads
+
+Payloads are stored in `/var/lib/vivisect/hid_payloads/`
+
+**Example Payload Format:**
+```
+# Payload: Windows System Triage
+# Description: Collects basic system information
+
+[DELAY:2000]
+[GUI+r]
+[DELAY:500]
+cmd
+[ENTER]
+[DELAY:1000]
+systeminfo > C:\temp\triage.txt
+[ENTER]
+[DELAY:2000]
+ipconfig /all >> C:\temp\triage.txt
+[ENTER]
+[DELAY:1000]
+exit
+[ENTER]
+```
+
+**Supported Commands:**
+- `[DELAY:ms]` - Wait specified milliseconds
+- `[ENTER]` - Press Enter key
+- `[GUI+r]` - Windows key + R (Run dialog)
+- `[CTRL+c]` - Control + C
+- Regular text - Types the text
+
+### Using HID Mode
+
+**Via Python API:**
+```python
+from src.modules.usb_gadget import USBGadget
+from src.core.config import Config
+from src.core.logger import Logger
+
+logger = Logger()
+config = Config()
+usb = USBGadget(logger, config)
+
+# Check if HID is available
+if usb.is_hid_available():
+    # Type a string
+    usb.send_hid_string("whoami\n")
+
+    # Execute pre-built payload
+    result = usb.execute_hid_payload('windows_triage')
+
+    # Execute custom script
+    result = usb.execute_hid_payload('custom_script', script="echo test\n")
+```
+
+**Pre-built Payloads:**
+- `windows_triage` - Collect Windows system information
+- `linux_triage` - Collect Linux system information
+- `custom_script` - Execute custom commands
+
+**Via CLI:**
+```bash
+# Execute payload
+vivisect usb --hid-payload windows_triage
+
+# Type custom text
+vivisect usb --hid-type "whoami"
+```
+
+### Security Best Practices
+
+1. **Always obtain written authorization** before using HID mode
+2. **Document your authorization** and keep it accessible
+3. **Log all HID activity** - Vivisect logs to syslog automatically
+4. **Test payloads** in a safe environment first
+5. **Understand the target OS** - Payloads are OS-specific
+6. **Use minimal delay** - Faster execution, less user notice
+7. **Have an abort plan** - Know how to quickly disconnect
+8. **Review legal implications** in your jurisdiction
+
+### Payload Development Tips
+
+**Windows Payloads:**
+- Use `[GUI+r]` to open Run dialog
+- `cmd` or `powershell` for command execution
+- Save output to `C:\temp\` or `C:\forensics\`
+- Use `>` for first output, `>>` for appending
+
+**Linux Payloads:**
+- Most distros: Terminal opens with `Ctrl+Alt+T`
+- Or type in already-open terminal
+- Save to `/tmp/forensics_*.txt`
+- Use `&&` to chain commands
+
+**macOS Payloads:**
+- Use `[CMD+space]` for Spotlight
+- Type `terminal` to open Terminal app
+- Save to `/tmp/` or `~/Documents/`
+
+**Timing Considerations:**
+- Slow systems: Increase delays
+- Fast systems: Decrease delays
+- Network operations: Add longer delays
+- File I/O: Add delays after writes
+
+### Troubleshooting HID Mode
+
+**Device not appearing:**
+```bash
+# Check if HID gadget is loaded
+ls -l /dev/hidg0
+
+# Restart HID service
+sudo systemctl restart vivisect-hid
+
+# Manually setup gadget
+sudo /usr/local/bin/setup-hid-gadget
+```
+
+**Keystrokes not working:**
+- Verify keyboard layout (US layout only)
+- Check if host PC is focused on correct window
+- Increase delays between keystrokes
+- Verify /dev/hidg0 permissions
+
+**Payload not executing:**
+- Check payload syntax
+- Verify OS compatibility
+- Test manually first
+- Check Vivisect logs: `journalctl -u vivisect-hid`
+
+### Ethical Considerations
+
+HID mode is a powerful dual-use tool. With great power comes great responsibility:
+
+**Legitimate Uses:**
+- ✅ Authorized penetration testing engagements
+- ✅ Incident response and forensics (with permission)
+- ✅ Security research and vulnerability disclosure
+- ✅ Educational training on owned systems
+- ✅ CTF competitions and red team exercises
+
+**Prohibited Uses:**
+- ❌ Unauthorized access to any system
+- ❌ Malware delivery or credential theft
+- ❌ Privacy violations
+- ❌ Corporate espionage
+- ❌ Any use without explicit permission
+
+**If in doubt, don't use it.** Always err on the side of caution and obtain proper authorization.
+
+### Legal Notice
+
+The developers of Vivisect provide HID mode for legitimate security testing and forensics purposes only. Users are solely responsible for ensuring they have proper authorization before using this feature. Unauthorized access to computer systems is illegal in most jurisdictions and may result in criminal prosecution.
+
+By using HID mode, you agree to:
+1. Obtain explicit written authorization before use
+2. Comply with all applicable laws and regulations
+3. Use the tool ethically and responsibly
+4. Accept full legal responsibility for your actions
 
 ---
 

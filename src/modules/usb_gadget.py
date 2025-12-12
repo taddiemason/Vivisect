@@ -21,7 +21,8 @@ class USBGadget:
         self.mass_storage_file = '/var/lib/vivisect/usb_storage.img'
         self.mass_storage_mount = '/mnt/vivisect_usb'
         self.serial_device = '/dev/ttyGS0'
-        self.gadget_mode = 'multi'  # 'ether', 'multi', 'serial', 'mass_storage'
+        self.hid_device = '/dev/hidg0'
+        self.gadget_mode = 'multi'  # 'ether', 'multi', 'serial', 'mass_storage', 'hid'
 
     def is_gadget_enabled(self) -> bool:
         """Check if USB gadget mode is enabled"""
@@ -618,3 +619,433 @@ class USBGadget:
         except Exception as e:
             self.logger.error(f"Failed to get multi-function status: {e}")
             return {'error': str(e)}
+
+    # ==================== Mode Switching ====================
+
+    def switch_to_mass_storage_only(self, read_only: bool = False) -> Dict[str, Any]:
+        """Switch to mass-storage-only mode (USB flash drive)"""
+        self.logger.info(f"Switching to mass-storage-only mode (read_only={read_only})")
+
+        try:
+            # Unload current gadget modules
+            unload_result = self._unload_gadget_modules()
+            if not unload_result['success']:
+                return unload_result
+
+            # Ensure backing file exists
+            if not os.path.exists(self.mass_storage_file):
+                create_result = self.create_mass_storage_image()
+                if not create_result.get('success'):
+                    return create_result
+
+            # Load g_mass_storage module
+            ro_flag = '1' if read_only else '0'
+            modprobe_cmd = [
+                'modprobe', 'g_mass_storage',
+                f'file={self.mass_storage_file}',
+                f'removable=1',
+                f'ro={ro_flag}',
+                f'stall=0',
+                'iSerialNumber=VIVISECT001',
+                'iManufacturer=Vivisect',
+                'iProduct=Forensics Evidence Drive'
+            ]
+
+            self.logger.info(f"Loading g_mass_storage: {' '.join(modprobe_cmd)}")
+            result = subprocess.run(modprobe_cmd, capture_output=True, text=True, timeout=10)
+
+            if result.returncode != 0:
+                raise Exception(f"Failed to load g_mass_storage: {result.stderr}")
+
+            # Update mode
+            self.gadget_mode = 'mass_storage'
+
+            self.logger.info("Switched to mass-storage-only mode successfully")
+
+            return {
+                'success': True,
+                'mode': 'mass_storage',
+                'read_only': read_only,
+                'backing_file': self.mass_storage_file,
+                'message': f'Device now appears as USB flash drive ({"read-only" if read_only else "read-write"})'
+            }
+
+        except Exception as e:
+            self.logger.error(f"Failed to switch to mass-storage-only mode: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def switch_to_multi_function(self) -> Dict[str, Any]:
+        """Switch to multi-function mode (network + storage + serial)"""
+        self.logger.info("Switching to multi-function mode")
+
+        try:
+            # Unload current gadget modules
+            unload_result = self._unload_gadget_modules()
+            if not unload_result['success']:
+                return unload_result
+
+            # Ensure backing file exists
+            if not os.path.exists(self.mass_storage_file):
+                create_result = self.create_mass_storage_image()
+                if not create_result.get('success'):
+                    return create_result
+
+            # Load g_multi module
+            modprobe_cmd = [
+                'modprobe', 'g_multi',
+                f'file={self.mass_storage_file}',
+                'removable=1',
+                'ro=0',
+                'stall=0',
+                'iSerialNumber=VIVISECT001',
+                'iManufacturer=Vivisect',
+                'iProduct=Forensics Suite'
+            ]
+
+            self.logger.info(f"Loading g_multi: {' '.join(modprobe_cmd)}")
+            result = subprocess.run(modprobe_cmd, capture_output=True, text=True, timeout=10)
+
+            if result.returncode != 0:
+                raise Exception(f"Failed to load g_multi: {result.stderr}")
+
+            # Update mode
+            self.gadget_mode = 'multi'
+
+            # Wait for interfaces to come up
+            time.sleep(2)
+
+            # Configure network if available
+            if self.is_gadget_enabled():
+                self.configure_network()
+
+            self.logger.info("Switched to multi-function mode successfully")
+
+            return {
+                'success': True,
+                'mode': 'multi',
+                'functions': ['network', 'mass_storage', 'serial'],
+                'message': 'Device now provides network, mass storage, and serial console'
+            }
+
+        except Exception as e:
+            self.logger.error(f"Failed to switch to multi-function mode: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def switch_to_network_only(self) -> Dict[str, Any]:
+        """Switch to network-only mode (USB Ethernet)"""
+        self.logger.info("Switching to network-only mode")
+
+        try:
+            # Unload current gadget modules
+            unload_result = self._unload_gadget_modules()
+            if not unload_result['success']:
+                return unload_result
+
+            # Load g_ether module
+            modprobe_cmd = [
+                'modprobe', 'g_ether',
+                'iSerialNumber=VIVISECT001',
+                'iManufacturer=Vivisect',
+                'iProduct=Forensics Network Adapter'
+            ]
+
+            self.logger.info(f"Loading g_ether: {' '.join(modprobe_cmd)}")
+            result = subprocess.run(modprobe_cmd, capture_output=True, text=True, timeout=10)
+
+            if result.returncode != 0:
+                raise Exception(f"Failed to load g_ether: {result.stderr}")
+
+            # Update mode
+            self.gadget_mode = 'ether'
+
+            # Wait for interface to come up
+            time.sleep(2)
+
+            # Configure network
+            self.configure_network()
+
+            self.logger.info("Switched to network-only mode successfully")
+
+            return {
+                'success': True,
+                'mode': 'ether',
+                'functions': ['network'],
+                'message': 'Device now appears as USB Ethernet adapter'
+            }
+
+        except Exception as e:
+            self.logger.error(f"Failed to switch to network-only mode: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def _unload_gadget_modules(self) -> Dict[str, Any]:
+        """Unload all USB gadget modules"""
+        self.logger.info("Unloading USB gadget modules")
+
+        try:
+            modules_to_unload = ['g_multi', 'g_ether', 'g_serial', 'g_mass_storage']
+
+            for module in modules_to_unload:
+                result = subprocess.run(
+                    ['modprobe', '-r', module],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                # Don't fail if module wasn't loaded
+                if result.returncode == 0:
+                    self.logger.info(f"Unloaded {module}")
+
+            # Wait for cleanup
+            time.sleep(1)
+
+            return {'success': True}
+
+        except Exception as e:
+            self.logger.error(f"Failed to unload gadget modules: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def get_current_mode(self) -> str:
+        """Get current USB gadget mode"""
+        try:
+            result = subprocess.run(['lsmod'], capture_output=True, text=True)
+
+            if 'g_multi' in result.stdout:
+                return 'multi'
+            elif 'g_ether' in result.stdout:
+                return 'ether'
+            elif 'g_serial' in result.stdout:
+                return 'serial'
+            elif 'g_mass_storage' in result.stdout:
+                return 'mass_storage'
+            else:
+                return 'none'
+
+        except Exception as e:
+            self.logger.error(f"Failed to get current mode: {e}")
+            return 'unknown'
+
+    # ==================== HID Keyboard Mode ====================
+
+    def is_hid_available(self) -> bool:
+        """Check if HID keyboard device is available"""
+        try:
+            return os.path.exists(self.hid_device)
+        except Exception as e:
+            self.logger.error(f"Failed to check HID availability: {e}")
+            return False
+
+    def switch_to_hid_mode(self) -> Dict[str, Any]:
+        """Switch to HID keyboard mode (automated keystroke injection)
+
+        WARNING: Only use for authorized security testing, forensics, and incident response.
+        Requires explicit permission from system owner.
+        """
+        self.logger.info("Switching to HID keyboard mode")
+        self.logger.warning("HID mode enables keystroke injection - USE ONLY WITH AUTHORIZATION")
+
+        try:
+            # Unload current gadget modules
+            unload_result = self._unload_gadget_modules()
+            if not unload_result['success']:
+                return unload_result
+
+            # Load g_hid module (using configfs for HID)
+            # Note: g_hid is not a simple module, requires configfs setup
+            # For now, we'll document manual setup in README
+
+            self.logger.info("HID mode requires manual configfs setup (see documentation)")
+
+            return {
+                'success': False,
+                'mode': 'hid',
+                'message': 'HID mode requires manual configfs setup. See USB_GADGET_README.md',
+                'note': 'Use setup-usb-hid.sh script to configure HID mode'
+            }
+
+        except Exception as e:
+            self.logger.error(f"Failed to switch to HID mode: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def send_hid_keystroke(self, keycode: bytes) -> Dict[str, Any]:
+        """Send a single HID keystroke
+
+        Args:
+            keycode: 8-byte HID report (modifier, reserved, key1-6)
+        """
+        try:
+            if not self.is_hid_available():
+                return {'success': False, 'error': 'HID device not available'}
+
+            with open(self.hid_device, 'rb+') as hid:
+                hid.write(keycode)
+                # Send key release
+                hid.write(b'\x00\x00\x00\x00\x00\x00\x00\x00')
+
+            return {'success': True}
+
+        except Exception as e:
+            self.logger.error(f"Failed to send keystroke: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def send_hid_string(self, text: str, delay_ms: int = 50) -> Dict[str, Any]:
+        """Type a string via HID keyboard
+
+        Args:
+            text: String to type
+            delay_ms: Delay between keystrokes in milliseconds
+        """
+        self.logger.info(f"Typing string via HID: {text[:20]}...")
+
+        try:
+            if not self.is_hid_available():
+                return {'success': False, 'error': 'HID device not available'}
+
+            # HID keycodes mapping (simplified - US keyboard layout)
+            keymap = self._get_hid_keymap()
+
+            keystroke_count = 0
+            for char in text:
+                if char in keymap:
+                    modifier, keycode = keymap[char]
+                    # Send keystroke
+                    report = bytes([modifier, 0, keycode, 0, 0, 0, 0, 0])
+                    self.send_hid_keystroke(report)
+                    keystroke_count += 1
+                    time.sleep(delay_ms / 1000.0)
+                else:
+                    self.logger.warning(f"Character not in keymap: {char}")
+
+            self.logger.info(f"Sent {keystroke_count} keystrokes")
+
+            return {
+                'success': True,
+                'keystroke_count': keystroke_count,
+                'text_length': len(text)
+            }
+
+        except Exception as e:
+            self.logger.error(f"Failed to send string: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def execute_hid_payload(self, payload_name: str, **kwargs) -> Dict[str, Any]:
+        """Execute a pre-defined HID payload
+
+        WARNING: Only use for authorized security testing and forensics.
+
+        Args:
+            payload_name: Name of payload to execute
+            **kwargs: Payload-specific parameters
+        """
+        self.logger.info(f"Executing HID payload: {payload_name}")
+        self.logger.warning("AUTHORIZATION REQUIRED - Executing automated keystroke payload")
+
+        try:
+            if not self.is_hid_available():
+                return {'success': False, 'error': 'HID device not available'}
+
+            payloads = self._get_hid_payloads()
+
+            if payload_name not in payloads:
+                return {'success': False, 'error': f'Unknown payload: {payload_name}'}
+
+            payload_func = payloads[payload_name]
+            result = payload_func(**kwargs)
+
+            self.logger.info(f"Payload {payload_name} executed")
+
+            return result
+
+        except Exception as e:
+            self.logger.error(f"Payload execution failed: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def _get_hid_keymap(self) -> Dict[str, tuple]:
+        """Get HID keycode mapping for US keyboard layout
+
+        Returns dict mapping character to (modifier, keycode)
+        Modifier bits: 0x02 = Left Shift
+        """
+        keymap = {
+            'a': (0x00, 0x04), 'b': (0x00, 0x05), 'c': (0x00, 0x06), 'd': (0x00, 0x07),
+            'e': (0x00, 0x08), 'f': (0x00, 0x09), 'g': (0x00, 0x0a), 'h': (0x00, 0x0b),
+            'i': (0x00, 0x0c), 'j': (0x00, 0x0d), 'k': (0x00, 0x0e), 'l': (0x00, 0x0f),
+            'm': (0x00, 0x10), 'n': (0x00, 0x11), 'o': (0x00, 0x12), 'p': (0x00, 0x13),
+            'q': (0x00, 0x14), 'r': (0x00, 0x15), 's': (0x00, 0x16), 't': (0x00, 0x17),
+            'u': (0x00, 0x18), 'v': (0x00, 0x19), 'w': (0x00, 0x1a), 'x': (0x00, 0x1b),
+            'y': (0x00, 0x1c), 'z': (0x00, 0x1d),
+            'A': (0x02, 0x04), 'B': (0x02, 0x05), 'C': (0x02, 0x06), 'D': (0x02, 0x07),
+            'E': (0x02, 0x08), 'F': (0x02, 0x09), 'G': (0x02, 0x0a), 'H': (0x02, 0x0b),
+            'I': (0x02, 0x0c), 'J': (0x02, 0x0d), 'K': (0x02, 0x0e), 'L': (0x02, 0x0f),
+            'M': (0x02, 0x10), 'N': (0x02, 0x11), 'O': (0x02, 0x12), 'P': (0x02, 0x13),
+            'Q': (0x02, 0x14), 'R': (0x02, 0x15), 'S': (0x02, 0x16), 'T': (0x02, 0x17),
+            'U': (0x02, 0x18), 'V': (0x02, 0x19), 'W': (0x02, 0x1a), 'X': (0x02, 0x1b),
+            'Y': (0x02, 0x1c), 'Z': (0x02, 0x1d),
+            '1': (0x00, 0x1e), '2': (0x00, 0x1f), '3': (0x00, 0x20), '4': (0x00, 0x21),
+            '5': (0x00, 0x22), '6': (0x00, 0x23), '7': (0x00, 0x24), '8': (0x00, 0x25),
+            '9': (0x00, 0x26), '0': (0x00, 0x27),
+            '!': (0x02, 0x1e), '@': (0x02, 0x1f), '#': (0x02, 0x20), '$': (0x02, 0x21),
+            '%': (0x02, 0x22), '^': (0x02, 0x23), '&': (0x02, 0x24), '*': (0x02, 0x25),
+            '(': (0x02, 0x26), ')': (0x02, 0x27),
+            '\n': (0x00, 0x28),  # Enter
+            ' ': (0x00, 0x2c),   # Space
+            '-': (0x00, 0x2d), '_': (0x02, 0x2d),
+            '=': (0x00, 0x2e), '+': (0x02, 0x2e),
+            '[': (0x00, 0x2f), '{': (0x02, 0x2f),
+            ']': (0x00, 0x30), '}': (0x02, 0x30),
+            '\\': (0x00, 0x31), '|': (0x02, 0x31),
+            ';': (0x00, 0x33), ':': (0x02, 0x33),
+            "'": (0x00, 0x34), '"': (0x02, 0x34),
+            ',': (0x00, 0x36), '<': (0x02, 0x36),
+            '.': (0x00, 0x37), '>': (0x02, 0x37),
+            '/': (0x00, 0x38), '?': (0x02, 0x38),
+        }
+        return keymap
+
+    def _get_hid_payloads(self) -> Dict[str, callable]:
+        """Get pre-defined HID payloads for forensics tasks"""
+
+        def payload_windows_triage(**kwargs):
+            """Windows triage - open cmd and run systeminfo"""
+            self.logger.info("Executing Windows triage payload")
+            # GUI+R to open Run dialog
+            time.sleep(1)
+            # Type cmd
+            self.send_hid_string("cmd\n")
+            time.sleep(1)
+            # Run systeminfo and save
+            output_file = kwargs.get('output_file', 'C:\\forensics\\systeminfo.txt')
+            self.send_hid_string(f"systeminfo > {output_file}\n")
+            time.sleep(2)
+            self.send_hid_string("exit\n")
+            return {'success': True, 'payload': 'windows_triage', 'output_file': output_file}
+
+        def payload_linux_triage(**kwargs):
+            """Linux triage - open terminal and collect system info"""
+            self.logger.info("Executing Linux triage payload")
+            time.sleep(1)
+            # Commands to run
+            commands = [
+                "uname -a > /tmp/forensics_triage.txt",
+                "hostname >> /tmp/forensics_triage.txt",
+                "whoami >> /tmp/forensics_triage.txt",
+                "date >> /tmp/forensics_triage.txt",
+            ]
+            for cmd in commands:
+                self.send_hid_string(f"{cmd}\n")
+                time.sleep(0.5)
+            return {'success': True, 'payload': 'linux_triage'}
+
+        def payload_custom_script(**kwargs):
+            """Execute custom script from kwargs"""
+            script = kwargs.get('script', '')
+            if not script:
+                return {'success': False, 'error': 'No script provided'}
+
+            self.send_hid_string(script)
+            return {'success': True, 'payload': 'custom_script', 'length': len(script)}
+
+        return {
+            'windows_triage': payload_windows_triage,
+            'linux_triage': payload_linux_triage,
+            'custom_script': payload_custom_script,
+        }

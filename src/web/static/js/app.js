@@ -668,6 +668,216 @@ function downloadReport(filename) {
     log(`Downloading report: ${filename}`, 'success');
 }
 
+// USB Mode Switching Functions
+function switchUSBMode(mode) {
+    const modeNames = {
+        'multi': 'Multi-Function (Network + Storage + Serial)',
+        'mass_storage': 'USB Flash Drive (Read-Write)',
+        'mass_storage_ro': 'USB Flash Drive (Read-Only)',
+        'network': 'Network Only (USB Ethernet)'
+    };
+
+    if (!confirm(`Switch to ${modeNames[mode]}?\n\nThis will disconnect and reconnect the USB device.`)) {
+        return;
+    }
+
+    showProgress(`Switching to ${modeNames[mode]}...`);
+    log(`Switching USB mode to: ${mode}`, 'info');
+
+    const payload = {
+        mode: mode === 'mass_storage_ro' ? 'mass_storage' : mode,
+        read_only: mode === 'mass_storage_ro'
+    };
+
+    fetch('/api/usb/mode/switch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideProgress();
+        if (data.error) {
+            alert('Error switching mode: ' + data.error);
+            log('USB mode switch failed', 'error');
+        } else if (data.success) {
+            log(data.message || 'USB mode switched successfully', 'success');
+            // Reload status after mode switch
+            setTimeout(loadSystemStatus, 2000);
+        } else {
+            alert('Mode switch failed');
+            log('USB mode switch failed', 'error');
+        }
+    })
+    .catch(error => {
+        hideProgress();
+        alert('Error: ' + error);
+        log('USB mode switch error', 'error');
+    });
+}
+
+// HID Keyboard Functions
+function loadHIDStatus() {
+    fetch('/api/usb/hid/status')
+        .then(response => response.json())
+        .then(data => {
+            const statusElem = document.getElementById('hid-status');
+            if (statusElem) {
+                if (data.available) {
+                    statusElem.innerHTML = '✅ HID Available';
+                    statusElem.style.color = '#10b981';
+                } else {
+                    statusElem.innerHTML = '⭕ HID Not Available';
+                    statusElem.style.color = '#64748b';
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error loading HID status:', error);
+        });
+}
+
+function loadHIDPayloads() {
+    fetch('/api/usb/hid/payloads')
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                alert('Error loading payloads: ' + data.error);
+                return;
+            }
+
+            const select = document.getElementById('hid-payload-select');
+            if (select) {
+                select.innerHTML = '<option value="">Select a payload...</option>';
+
+                data.payloads.forEach(name => {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    const desc = data.details[name]?.description || name;
+                    option.textContent = `${name} - ${desc}`;
+                    select.appendChild(option);
+                });
+            }
+
+            log(`Loaded ${data.payloads.length} HID payloads`, 'success');
+        })
+        .catch(error => {
+            console.error('Error loading payloads:', error);
+        });
+}
+
+function sendHIDString() {
+    const text = document.getElementById('hid-text-input').value;
+    const delay = document.getElementById('hid-delay').value || 50;
+
+    if (!text) {
+        alert('Please enter text to send');
+        return;
+    }
+
+    if (!confirm(`⚠️ AUTHORIZATION WARNING ⚠️\n\nYou are about to send keystrokes via HID mode:\n"${text.substring(0, 100)}${text.length > 100 ? '...' : ''}"\n\nConfirm you have authorization to use HID mode on the connected system.`)) {
+        return;
+    }
+
+    showProgress('Sending HID keystrokes...');
+    log(`Sending HID string (${text.length} chars)`, 'info');
+
+    fetch('/api/usb/hid/send-string', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({text, delay_ms: parseInt(delay)})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            hideProgress();
+            alert('Error: ' + data.error);
+            log('HID send string failed', 'error');
+        } else {
+            log(`HID string sent (task ${data.task_id})`, 'success');
+        }
+    })
+    .catch(error => {
+        hideProgress();
+        alert('Error: ' + error);
+        log('HID send string error', 'error');
+    });
+}
+
+function executeHIDPayload() {
+    const payloadName = document.getElementById('hid-payload-select').value;
+
+    if (!payloadName) {
+        alert('Please select a payload');
+        return;
+    }
+
+    if (!confirm(`⚠️ AUTHORIZATION WARNING ⚠️\n\nYou are about to execute HID payload:\n"${payloadName}"\n\nThis will send automated keystrokes to the connected system.\n\nConfirm you have explicit authorization for this action.`)) {
+        return;
+    }
+
+    showProgress(`Executing HID payload: ${payloadName}...`);
+    log(`Executing HID payload: ${payloadName}`, 'info');
+
+    fetch('/api/usb/hid/execute-payload', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({payload_name: payloadName})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            hideProgress();
+            alert('Error: ' + data.error);
+            log('HID payload execution failed', 'error');
+        } else {
+            log(`HID payload ${payloadName} started (task ${data.task_id})`, 'success');
+        }
+    })
+    .catch(error => {
+        hideProgress();
+        alert('Error: ' + error);
+        log('HID payload execution error', 'error');
+    });
+}
+
+function switchToHIDMode() {
+    if (!confirm(`⚠️ CRITICAL WARNING ⚠️\n\nYou are about to switch to HID Keyboard Mode.\n\nHID mode enables automated keystroke injection (BadUSB functionality).\n\nBy proceeding, you confirm:\n1. You have explicit written authorization\n2. This is for legitimate security testing or forensics\n3. You understand legal and ethical implications\n\nProceed with HID mode switch?`)) {
+        return;
+    }
+
+    showProgress('Switching to HID Keyboard Mode...');
+    log('Switching to HID mode', 'info');
+
+    fetch('/api/usb/hid/mode/switch', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({})
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideProgress();
+        if (data.error) {
+            alert('Error switching to HID mode: ' + data.error);
+            log('HID mode switch failed', 'error');
+        } else if (data.success) {
+            log(data.message || 'HID mode activated', 'success');
+            setTimeout(() => {
+                loadSystemStatus();
+                loadHIDStatus();
+            }, 2000);
+        } else {
+            alert('HID mode switch failed');
+            log('HID mode switch failed', 'error');
+        }
+    })
+    .catch(error => {
+        hideProgress();
+        alert('Error: ' + error);
+        log('HID mode switch error', 'error');
+    });
+}
+
 // Auto-refresh status every 30 seconds
 setInterval(loadSystemStatus, 30000);
 
@@ -676,3 +886,9 @@ const reportsTab = document.querySelector('[data-tab="reports"]');
 if (reportsTab) {
     reportsTab.addEventListener('click', listReports);
 }
+
+// Auto-load HID payloads on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadHIDPayloads();
+    loadHIDStatus();
+});

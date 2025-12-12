@@ -26,6 +26,7 @@
             <button class="tab-btn" data-tab="network">Network</button>
             <button class="tab-btn" data-tab="memory">Memory</button>
             <button class="tab-btn" data-tab="artifacts">Artifacts</button>
+            <button class="tab-btn" data-tab="hid">HID Keyboard</button>
             <button class="tab-btn" data-tab="reports">Reports</button>
         </nav>
 
@@ -85,6 +86,23 @@
                     </button>
                     <button class="btn btn-secondary" onclick="showTab('artifacts'); extractLogs()">
                         📋 Extract System Logs
+                    </button>
+                </div>
+
+                <div class="card">
+                    <h2>USB Gadget Mode</h2>
+                    <p style="font-size: 0.9em; color: #64748b; margin-bottom: 15px;">Switch between different USB modes</p>
+                    <button class="btn btn-secondary" onclick="switchUSBMode('multi')">
+                        🔧 Multi-Function
+                    </button>
+                    <button class="btn btn-secondary" onclick="switchUSBMode('mass_storage')">
+                        💾 USB Drive (RW)
+                    </button>
+                    <button class="btn btn-secondary" onclick="switchUSBMode('mass_storage_ro')">
+                        🔒 USB Drive (RO)
+                    </button>
+                    <button class="btn btn-secondary" onclick="switchUSBMode('network')">
+                        🌐 Network Only
                     </button>
                 </div>
 
@@ -201,6 +219,93 @@
                 </div>
 
                 <div id="artifacts-results" class="results-display"></div>
+            </div>
+        </div>
+
+        <!-- HID Keyboard Tab -->
+        <div id="hid" class="tab-content">
+            <div class="card" style="background: #fee; border: 2px solid #f44;">
+                <h2 style="color: #c00;">⚠️ CRITICAL SECURITY WARNING ⚠️</h2>
+                <div style="padding: 15px; background: #fff; border-left: 4px solid #c00; margin: 15px 0;">
+                    <p style="font-weight: bold; margin-bottom: 10px;">HID Keyboard Mode enables automated keystroke injection (BadUSB functionality).</p>
+                    <p style="margin-bottom: 5px;"><strong>Legitimate Uses ONLY:</strong></p>
+                    <ul style="margin-left: 20px; margin-bottom: 10px;">
+                        <li>✅ Authorized penetration testing with written permission</li>
+                        <li>✅ Digital forensics and incident response</li>
+                        <li>✅ CTF competitions and security research</li>
+                        <li>✅ Educational purposes on systems you own</li>
+                    </ul>
+                    <p style="margin-bottom: 5px;"><strong>Prohibited Uses:</strong></p>
+                    <ul style="margin-left: 20px; margin-bottom: 10px;">
+                        <li>❌ Unauthorized access to computer systems</li>
+                        <li>❌ Malware delivery or distribution</li>
+                        <li>❌ Privacy violations or data theft</li>
+                        <li>❌ Any activity without explicit written authorization</li>
+                    </ul>
+                    <p style="color: #c00; font-weight: bold;">By using this feature, you confirm you have explicit authorization and understand the legal implications. All HID operations are logged.</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>HID Keyboard Status</h2>
+                <div class="status-item">
+                    <span class="label">HID Device:</span>
+                    <span id="hid-status">🔌 Checking...</span>
+                </div>
+                <button class="btn btn-secondary" onclick="switchToHIDMode()">
+                    🎹 Switch to HID Mode
+                </button>
+                <p style="font-size: 0.85em; color: #64748b; margin-top: 10px;">
+                    Note: Requires setup-usb-hid.sh to be run first
+                </p>
+            </div>
+
+            <div class="card">
+                <h2>Send HID String</h2>
+                <p style="font-size: 0.9em; color: #64748b; margin-bottom: 15px;">Type text on the connected system</p>
+
+                <div class="form-group">
+                    <label>Text to Send:</label>
+                    <textarea id="hid-text-input" placeholder="Enter text to type on target system..." class="input-field" rows="4" maxlength="500"></textarea>
+                    <span style="font-size: 0.8em; color: #64748b;">Max 500 characters</span>
+                </div>
+
+                <div class="form-group">
+                    <label>Delay Between Keys (ms):</label>
+                    <input type="number" id="hid-delay" value="50" min="10" max="500" class="input-field">
+                </div>
+
+                <button class="btn btn-primary btn-large" onclick="sendHIDString()">
+                    ⌨️ Send HID String
+                </button>
+            </div>
+
+            <div class="card">
+                <h2>Execute HID Payload</h2>
+                <p style="font-size: 0.9em; color: #64748b; margin-bottom: 15px;">Run pre-configured HID automation scripts</p>
+
+                <div class="form-group">
+                    <label>Payload:</label>
+                    <select id="hid-payload-select" class="input-field">
+                        <option value="">Loading payloads...</option>
+                    </select>
+                </div>
+
+                <button class="btn btn-primary btn-large" onclick="executeHIDPayload()">
+                    🚀 Execute Payload
+                </button>
+
+                <div style="margin-top: 20px; padding: 10px; background: #f8f9fa; border-left: 3px solid #0066cc;">
+                    <p style="font-size: 0.85em; margin-bottom: 5px;"><strong>Available Payloads:</strong></p>
+                    <p style="font-size: 0.8em; color: #64748b; margin: 0;">
+                        • <strong>windows_triage:</strong> Windows system info collection<br>
+                        • <strong>linux_triage:</strong> Linux system info collection<br>
+                        • <strong>custom_script:</strong> Custom command execution
+                    </p>
+                    <p style="font-size: 0.8em; color: #64748b; margin-top: 10px;">
+                        Custom payloads can be added to: /var/lib/vivisect/hid_payloads/
+                    </p>
+                </div>
             </div>
         </div>
 

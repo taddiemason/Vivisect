@@ -395,6 +395,39 @@ def create_app():
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
+    @app.route('/api/usb/mode/switch', methods=['POST'])
+    def switch_usb_mode():
+        """Switch USB gadget mode"""
+        try:
+            data = request.json or {}
+            mode = data.get('mode')  # 'multi', 'mass_storage', 'ether'
+            read_only = data.get('read_only', False)
+
+            if mode == 'multi':
+                result = usb_gadget.switch_to_multi_function()
+            elif mode == 'mass_storage':
+                result = usb_gadget.switch_to_mass_storage_only(read_only=read_only)
+            elif mode == 'ether' or mode == 'network':
+                result = usb_gadget.switch_to_network_only()
+            else:
+                return jsonify({'error': f'Invalid mode: {mode}'}), 400
+
+            return jsonify(result)
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/usb/mode/current')
+    def get_current_mode():
+        """Get current USB gadget mode"""
+        try:
+            mode = usb_gadget.get_current_mode()
+            return jsonify({
+                'mode': mode,
+                'timestamp': datetime.now().isoformat()
+            })
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
     @app.route('/api/usb/configure', methods=['POST'])
     def configure_usb_network():
         """Configure USB network interface"""
@@ -442,6 +475,108 @@ def create_app():
             active_tasks[task_id].start()
 
             return jsonify({'task_id': task_id, 'status': 'started'})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/usb/hid/status')
+    def hid_status():
+        """Get HID keyboard status"""
+        try:
+            available = usb_gadget.is_hid_available()
+            return jsonify({
+                'available': available,
+                'device': '/dev/hidg0' if available else None,
+                'warning': 'HID mode requires authorization - use only for legitimate security testing'
+            })
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/usb/hid/payloads')
+    def list_hid_payloads():
+        """List available HID payloads"""
+        try:
+            payloads = usb_gadget._get_hid_payloads()
+            return jsonify({
+                'payloads': list(payloads.keys()),
+                'details': {
+                    name: {
+                        'description': payload.get('description', ''),
+                        'commands_count': len(payload.get('commands', []))
+                    }
+                    for name, payload in payloads.items()
+                }
+            })
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/usb/hid/send-string', methods=['POST'])
+    def send_hid_string():
+        """Send a string via HID keyboard"""
+        try:
+            data = request.json or {}
+            text = data.get('text', '')
+            delay_ms = data.get('delay_ms', 50)
+
+            if not text:
+                return jsonify({'error': 'No text provided'}), 400
+
+            if len(text) > 500:
+                return jsonify({'error': 'Text too long (max 500 characters)'}), 400
+
+            def run_hid_string():
+                result = usb_gadget.send_hid_string(text, delay_ms=delay_ms)
+                socketio.emit('task_complete', {
+                    'task': 'hid_send_string',
+                    'result': result
+                })
+
+            task_id = f"hid_string_{datetime.now().timestamp()}"
+            active_tasks[task_id] = threading.Thread(target=run_hid_string)
+            active_tasks[task_id].start()
+
+            return jsonify({
+                'task_id': task_id,
+                'status': 'started',
+                'text_length': len(text)
+            })
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/usb/hid/execute-payload', methods=['POST'])
+    def execute_hid_payload():
+        """Execute a pre-built HID payload"""
+        try:
+            data = request.json or {}
+            payload_name = data.get('payload_name')
+
+            if not payload_name:
+                return jsonify({'error': 'No payload name provided'}), 400
+
+            def run_hid_payload():
+                result = usb_gadget.execute_hid_payload(payload_name)
+                socketio.emit('task_complete', {
+                    'task': 'hid_execute_payload',
+                    'result': result
+                })
+
+            task_id = f"hid_payload_{datetime.now().timestamp()}"
+            active_tasks[task_id] = threading.Thread(target=run_hid_payload)
+            active_tasks[task_id].start()
+
+            return jsonify({
+                'task_id': task_id,
+                'status': 'started',
+                'payload': payload_name
+            })
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/usb/hid/mode/switch', methods=['POST'])
+    def switch_to_hid():
+        """Switch to HID keyboard mode"""
+        try:
+            result = usb_gadget.switch_to_hid_mode()
+            return jsonify(result)
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
