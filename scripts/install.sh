@@ -80,7 +80,7 @@ apt-get install -y x11-xserver-utils unclutter xinit xorg || echo "Warning: some
 
 echo "[6/9] Installing Python dependencies..."
 # Use --break-system-packages for Debian 12+ / Ubuntu 24.04+ (PEP 668)
-pip3 install --upgrade pip --break-system-packages 2>/dev/null || pip3 install --upgrade pip
+# Skip pip upgrade to avoid conflicts with system-managed pip
 pip3 install -r requirements.txt --break-system-packages 2>/dev/null || pip3 install -r requirements.txt
 
 echo "[7/9] Creating directories and setting up Vivisect..."
