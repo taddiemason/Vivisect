@@ -13,6 +13,7 @@ build/
 
 # Forensics output
 output/
+demo_output/
 *.pcap
 *.raw
 *.img

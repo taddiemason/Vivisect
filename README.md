@@ -44,6 +44,17 @@
 - Persistence mechanism detection
 - Timeline creation
 
+### 📊 Enhanced Reporting & Visualization
+- Interactive HTML reports with Chart.js visualizations
+- Executive summary dashboard with key metrics
+- Findings by module (bar charts)
+- Severity distribution (doughnut charts)
+- Activity timeline (line charts)
+- Artifact type distribution (pie charts)
+- Color-coded severity indicators
+- Modern, responsive UI with print optimization
+- JSON and plain text export options
+
 ## Installation
 
 ### Prerequisites
@@ -247,6 +258,38 @@ vivisect report CASE-2024-001 --format html
 vivisect report CASE-2024-001 --format json
 vivisect report CASE-2024-001 --format txt
 ```
+
+### 📊 Enhanced Reporting with Visualization
+
+Vivisect now includes **enhanced HTML reports** with interactive visualizations powered by Chart.js:
+
+#### Features
+- **Executive Summary Dashboard** - Key metrics at a glance with color-coded severity indicators
+- **Interactive Charts**:
+  - Findings by Module (Bar Chart)
+  - Severity Distribution (Doughnut Chart)
+  - Activity Timeline (Line Chart)
+  - Artifact Types Distribution (Pie Chart)
+- **Detailed Findings** - Color-coded cards with severity badges
+- **Timeline Visualization** - Chronological event tracking
+- **Modern UI** - Responsive design with gradient backgrounds
+- **Print-Ready** - Optimized for PDF generation and printing
+
+#### Try It Out
+
+Run the demo to see enhanced reporting in action:
+
+```bash
+python3 examples/demo_enhanced_reports.py
+```
+
+This will generate sample reports with visualizations in `./demo_output/`. Open the HTML report in your browser to see the interactive features.
+
+#### Report Formats
+
+- **HTML** - Enhanced interactive reports with visualizations (recommended)
+- **JSON** - Structured data for integration with other tools
+- **TXT** - Plain text for terminal viewing and archival
 
 ## Auto-Start Configuration
 
@@ -473,14 +516,19 @@ For issues, questions, or contributions:
 
 ## Roadmap
 
+### ✅ Completed
+- [x] Enhanced reporting with visualization
+- [x] Timeline visualization
+- [x] Web-based GUI
+
+### 🚧 Planned
 - [ ] Windows artifact support (via Wine/mounted NTFS)
-- [ ] Enhanced reporting with visualization
 - [ ] REST API for remote operations
-- [ ] Web-based GUI
 - [ ] Plugin system for custom modules
 - [ ] Cloud storage integration
 - [ ] Automated threat intelligence lookup
-- [ ] Timeline visualization
+- [ ] Advanced network graph visualization
+- [ ] Machine learning-based anomaly detection
 
 ## Acknowledgments
 
