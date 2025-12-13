@@ -61,8 +61,9 @@ apt-get install -y binwalk || echo "Warning: binwalk not available"
 apt-get install -y exiftool || echo "Warning: exiftool not available"
 
 echo "[4/6] Installing Python dependencies..."
-pip3 install --upgrade pip
-pip3 install -r requirements.txt
+# Use --break-system-packages for Debian 12+ / Ubuntu 24.04+ (PEP 668)
+pip3 install --upgrade pip --break-system-packages 2>/dev/null || pip3 install --upgrade pip
+pip3 install -r requirements.txt --break-system-packages 2>/dev/null || pip3 install -r requirements.txt
 
 echo "[5/6] Creating directories and setting up Vivisect..."
 INSTALL_DIR="/opt/vivisect"
