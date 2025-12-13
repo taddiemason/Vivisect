@@ -144,6 +144,16 @@ sudo pip3 install --upgrade pip
 sudo pip3 install -r requirements.txt --no-cache-dir
 ```
 
+### Issue: "externally-managed-environment" error
+
+**Solution:** Newer Debian/Ubuntu systems (Debian 12+, Ubuntu 24.04+) use PEP 668 to protect system Python. The updated installation scripts now handle this automatically. If you're using an older script, manually install with:
+```bash
+sudo pip3 install --upgrade pip --break-system-packages
+sudo pip3 install -r requirements.txt --break-system-packages
+```
+
+Note: This is safe for Vivisect as it's a system-level forensics tool.
+
 ### Issue: Permission denied errors
 
 **Solution:** Ensure you're running with sudo:
