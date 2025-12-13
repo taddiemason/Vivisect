@@ -18,7 +18,7 @@ fi
 echo "[1/7] Updating package lists..."
 apt-get update -qq
 
-echo "[2/7] Installing system dependencies..."
+echo "[2/7] Installing core system dependencies..."
 apt-get install -y \
     python3 \
     python3-pip \
@@ -26,43 +26,44 @@ apt-get install -y \
     tcpdump \
     tshark \
     wireshark-common \
-    foremost \
-    scalpel \
-    dcfldd \
-    sleuthkit \
     libmagic1 \
     libmagic-dev \
-    volatility \
-    binwalk \
-    exiftool \
     git \
     build-essential
 
-# Optional tools
-echo "[3/9] Installing optional forensics tools..."
-apt-get install -y \
-    autopsy \
-    guymager \
-    bulk-extractor \
-    yara \
-    clamav \
-    chkrootkit \
-    rkhunter \
-    lynis || true
+echo "[3/9] Installing forensics tools (optional, may skip if unavailable)..."
+# These may not be available on all systems, so we use || true
+apt-get install -y foremost || echo "Warning: foremost not available"
+apt-get install -y scalpel || echo "Warning: scalpel not available"
+apt-get install -y dcfldd || echo "Warning: dcfldd not available (dd will be used as fallback)"
+apt-get install -y sleuthkit || echo "Warning: sleuthkit not available"
+apt-get install -y binwalk || echo "Warning: binwalk not available"
+apt-get install -y exiftool || echo "Warning: exiftool not available"
+apt-get install -y yara || echo "Warning: yara not available"
 
-# GUI dependencies
-echo "[4/9] Installing GUI dependencies..."
-apt-get install -y \
-    chromium-browser \
-    x11-xserver-utils \
-    unclutter \
-    xinit \
-    xorg || true
+# Optional advanced tools
+echo "[4/9] Installing optional advanced forensics tools..."
+apt-get install -y autopsy || echo "Warning: autopsy not available"
+apt-get install -y guymager || echo "Warning: guymager not available"
+apt-get install -y bulk-extractor || echo "Warning: bulk-extractor not available"
+apt-get install -y clamav || echo "Warning: clamav not available"
+apt-get install -y chkrootkit || echo "Warning: chkrootkit not available"
+apt-get install -y rkhunter || echo "Warning: rkhunter not available"
+apt-get install -y lynis || echo "Warning: lynis not available"
 
-echo "[5/9] Installing Python dependencies..."
+# Note: volatility is typically installed via pip, not apt
+echo "Note: Volatility 3 can be installed via pip with: pip3 install volatility3"
+
+# GUI dependencies (try both old and new package names)
+echo "[5/9] Installing GUI dependencies (optional)..."
+apt-get install -y chromium-browser || apt-get install -y chromium || echo "Warning: chromium not available"
+apt-get install -y x11-xserver-utils unclutter xinit xorg || echo "Warning: some GUI packages not available"
+
+echo "[6/9] Installing Python dependencies..."
+pip3 install --upgrade pip
 pip3 install -r requirements.txt
 
-echo "[6/9] Creating directories and setting up Vivisect..."
+echo "[7/9] Creating directories and setting up Vivisect..."
 INSTALL_DIR="/opt/vivisect"
 mkdir -p "$INSTALL_DIR"
 mkdir -p /etc/vivisect
@@ -117,27 +118,33 @@ chmod +x /usr/local/bin/vivisect
 ln -sf "$INSTALL_DIR/src/web/run_server.py" /usr/local/bin/vivisect-gui
 chmod +x /usr/local/bin/vivisect-gui
 
-echo "[7/9] Setting up systemd services..."
-cp systemd/vivisect.service /etc/systemd/system/
-cp systemd/vivisect-gui.service /etc/systemd/system/
+echo "[8/9] Setting up systemd services..."
+if [ -f systemd/vivisect.service ]; then
+    cp systemd/vivisect.service /etc/systemd/system/
+fi
+if [ -f systemd/vivisect-gui.service ]; then
+    cp systemd/vivisect-gui.service /etc/systemd/system/
+fi
 systemctl daemon-reload
 
-echo "[8/9] Configuring services..."
-# Enable CLI service
-systemctl enable vivisect.service
+echo "[9/9] Configuring services and final setup..."
+# Enable CLI service if systemd file exists
+if [ -f /etc/systemd/system/vivisect.service ]; then
+    systemctl enable vivisect.service || echo "Warning: Could not enable vivisect service"
+fi
 
 echo ""
 echo "GUI Setup:"
-read -p "Do you want to enable GUI kiosk mode on boot? (y/n) " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    systemctl enable vivisect-gui.service
-    echo "✓ GUI kiosk mode will launch on boot"
-else
-    echo "○ GUI kiosk mode disabled (you can start manually with: vivisect-gui)"
+if [ -f /etc/systemd/system/vivisect-gui.service ]; then
+    read -p "Do you want to enable GUI kiosk mode on boot? (y/n) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        systemctl enable vivisect-gui.service
+        echo "✓ GUI kiosk mode will launch on boot"
+    else
+        echo "○ GUI kiosk mode disabled (you can start manually with: vivisect-gui)"
+    fi
 fi
-
-echo "[9/9] Final setup..."
 
 echo ""
 echo "================================================================"
