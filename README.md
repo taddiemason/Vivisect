@@ -4,13 +4,13 @@
 
 ## Features
 
-### 🔍 Disk Imaging
+###  Disk Imaging
 - Create forensic images using `dd` or `dcfldd`
 - Built-in hash verification (MD5, SHA-1, SHA-256)
 - Support for image splitting and compression
 - Device information gathering
 
-### 📁 File Analysis
+###  File Analysis
 - Multi-algorithm hash calculation
 - File carving and recovery
 - Metadata extraction
@@ -18,7 +18,7 @@
 - String extraction
 - Hidden data detection
 
-### 🌐 Network Forensics
+###  Network Forensics
 - Live packet capture
 - PCAP file analysis
 - Protocol hierarchy analysis
@@ -27,7 +27,7 @@
 - DNS query analysis
 - C2 traffic detection
 
-### 💾 Memory Analysis
+###  Memory Analysis
 - Memory dump creation (LiME, AVML, dd)
 - Volatility-based analysis
 - Process enumeration
@@ -35,7 +35,7 @@
 - Malware scanning
 - Live system analysis
 
-### 🗃️ Artifact Extraction
+###  Artifact Extraction
 - Browser history (Chrome, Firefox, Edge)
 - System logs (auth, syslog, kernel)
 - User artifacts (bash history, SSH keys)
