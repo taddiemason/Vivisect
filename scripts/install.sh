@@ -4,6 +4,24 @@
 
 set -e
 
+# Colors for output
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+clear
+
+echo -e "${CYAN}"
+cat << "EOF"
+    ____                       __  _
+   / __/__ _____  ___ ____  __/ /_(_)______ _
+  _\ \/ // / _ \/ -_)  _/ |/ / __/ / __/ _ `/
+ /___/\_, /_//_/\__/_/  |___/\__/_/\__/\_,_/
+     /___/
+
+     Digital Forensics Suite - Powered by Vivisect
+EOF
+echo -e "${NC}"
+
 echo "================================================================"
 echo "  Vivisect Digital Forensics Suite - Installation"
 echo "================================================================"
