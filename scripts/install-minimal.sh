@@ -27,10 +27,11 @@ apt-get install -y \
     tcpdump \
     tshark \
     wireshark-common \
-    libmagic1 \
-    libmagic-dev \
     git \
     build-essential
+
+# Install libmagic (try new t64 version first, fallback to old version)
+apt-get install -y libmagic1t64 libmagic-dev || apt-get install -y libmagic1 libmagic-dev
 
 echo "[3/6] Installing optional forensics tools (may skip if unavailable)..."
 # Try to install these but don't fail if they're missing

@@ -127,6 +127,15 @@ ls -l /opt/vivisect/
 sudo ./scripts/install-minimal.sh
 ```
 
+### Issue: "Package 'libmagic1' has no installation candidate"
+
+**Solution:** Newer Debian/Ubuntu versions use `libmagic1t64` instead. The updated installation scripts now handle this automatically. If you're using an older version of the script, manually install with:
+```bash
+sudo apt-get install -y libmagic1t64 libmagic-dev
+# Or on older systems:
+sudo apt-get install -y libmagic1 libmagic-dev
+```
+
 ### Issue: Python package installation fails
 
 **Solution:** Update pip and try again:
