@@ -55,7 +55,7 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/vivisect/vivisect.git
+git clone https://github.com/taddiemason/Vivisect
 cd vivisect
 
 # Make installation script executable
