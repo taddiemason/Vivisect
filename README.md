@@ -44,7 +44,7 @@
 - Persistence mechanism detection
 - Timeline creation
 
-### 📊 Enhanced Reporting & Visualization
+###  Enhanced Reporting & Visualization
 - Interactive HTML reports with Chart.js visualizations
 - Executive summary dashboard with key metrics
 - Findings by module (bar charts)
