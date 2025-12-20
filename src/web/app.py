@@ -500,8 +500,8 @@ def create_app():
                 'payloads': list(payloads.keys()),
                 'details': {
                     name: {
-                        'description': payload.get('description', ''),
-                        'commands_count': len(payload.get('commands', []))
+                        'description': payload.__doc__.strip() if payload.__doc__ else f'HID payload: {name}',
+                        'type': 'function'
                     }
                     for name, payload in payloads.items()
                 }
