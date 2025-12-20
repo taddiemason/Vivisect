@@ -59,6 +59,14 @@ class MemoryAnalysis:
 
             self.logger.info(f"LiME command: {' '.join(insmod_cmd)}")
 
+            # Execute insmod command
+            result = subprocess.run(insmod_cmd, capture_output=True, text=True, timeout=300)
+
+            if result.returncode != 0:
+                raise Exception(f"LiME insmod failed: {result.stderr}")
+
+            self.logger.info(f"Memory dump with LiME completed: {output_path}")
+
             return {
                 'success': True,
                 'method': 'lime',
@@ -85,11 +93,19 @@ class MemoryAnalysis:
 
             self.logger.info(f"dd command: {' '.join(dd_cmd)}")
 
+            # Execute dd command
+            result = subprocess.run(dd_cmd, capture_output=True, text=True, timeout=600)
+
+            if result.returncode != 0:
+                raise Exception(f"dd command failed: {result.stderr}")
+
+            self.logger.info(f"Memory dump with dd completed: {output_path}")
+
             return {
                 'success': True,
                 'method': 'dd',
                 'output': output_path,
-                'command': ' '.join(dd_cmd),
+                'command': ' '.join(dd_cmd)',
                 'timestamp': datetime.now().isoformat(),
                 'note': 'Using /proc/kcore - may not capture all physical memory'
             }
@@ -106,6 +122,14 @@ class MemoryAnalysis:
             avml_cmd = ['avml', output_path]
 
             self.logger.info(f"AVML command: {' '.join(avml_cmd)}")
+
+            # Execute AVML command
+            result = subprocess.run(avml_cmd, capture_output=True, text=True, timeout=600)
+
+            if result.returncode != 0:
+                raise Exception(f"AVML command failed: {result.stderr}")
+
+            self.logger.info(f"Memory dump with AVML completed: {output_path}")
 
             return {
                 'success': True,
