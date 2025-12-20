@@ -64,28 +64,30 @@ class NetworkForensics:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             output_path = os.path.join(self.output_dir, f"{output_file}_{timestamp}.pcap")
 
-            # Build tcpdump command
-            tcpdump_cmd = ['tcpdump', '-i', interface, '-w', output_path]
-
+            # Build tcpdump command with timeout wrapper
             if packet_count:
-                tcpdump_cmd.extend(['-c', str(packet_count)])
+                # Use packet count limit
+                tcpdump_cmd = ['tcpdump', '-i', interface, '-w', output_path, '-c', str(packet_count)]
+            else:
+                # Use timeout command to limit duration
+                tcpdump_cmd = ['timeout', f'{duration}s', 'tcpdump', '-i', interface, '-w', output_path]
 
             if filter_expression:
                 tcpdump_cmd.append(filter_expression)
 
             self.logger.info(f"Capture command: {' '.join(tcpdump_cmd)}")
 
-            # Execute tcpdump
-            # Note: For long captures, this should be run in background
-            timeout_duration = duration + 10 if duration else None
+            # Execute tcpdump with timeout wrapper
+            # timeout command exits with code 124 when it times out (this is normal)
             process = subprocess.run(
                 tcpdump_cmd,
                 capture_output=True,
                 text=True,
-                timeout=timeout_duration
+                timeout=duration + 30  # Python safety timeout
             )
 
-            if process.returncode != 0:
+            # Exit code 124 means timeout killed the process (expected for duration-based captures)
+            if process.returncode not in [0, 124]:
                 raise Exception(f"tcpdump command failed: {process.stderr}")
 
             self.logger.info(f"Packet capture completed: {output_path}")
