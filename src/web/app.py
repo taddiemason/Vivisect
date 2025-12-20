@@ -100,10 +100,12 @@ def create_app():
                 except Exception as e:
                     result = {'success': False, 'error': str(e)}
 
-                socketio.emit('task_complete', {
-                    'task': 'disk_image',
-                    'result': result
-                })
+                # Emit with app context for background threads
+                with app.app_context():
+                    socketio.emit('task_complete', {
+                        'task': 'disk_image',
+                        'result': result
+                    }, namespace='/')
 
             task_id = f"disk_image_{datetime.now().timestamp()}"
             active_tasks[task_id] = threading.Thread(target=run_imaging)
@@ -139,10 +141,12 @@ def create_app():
                 except Exception as e:
                     result = {'success': False, 'error': str(e)}
 
-                socketio.emit('task_complete', {
-                    'task': 'network_capture',
-                    'result': result
-                })
+                # Emit with app context for background threads
+                with app.app_context():
+                    socketio.emit('task_complete', {
+                        'task': 'network_capture',
+                        'result': result
+                    }, namespace='/')
 
             task_id = f"capture_{datetime.now().timestamp()}"
             active_tasks[task_id] = threading.Thread(target=run_capture)
@@ -175,10 +179,12 @@ def create_app():
                 except Exception as e:
                     result = {'success': False, 'error': str(e)}
 
-                socketio.emit('task_complete', {
-                    'task': 'memory_dump',
-                    'result': result
-                })
+                # Emit with app context for background threads
+                with app.app_context():
+                    socketio.emit('task_complete', {
+                        'task': 'memory_dump',
+                        'result': result
+                    }, namespace='/')
 
             task_id = f"memory_dump_{datetime.now().timestamp()}"
             active_tasks[task_id] = threading.Thread(target=run_dump)
