@@ -105,7 +105,7 @@ class MemoryAnalysis:
                 'success': True,
                 'method': 'dd',
                 'output': output_path,
-                'command': ' '.join(dd_cmd)',
+                'command': ' '.join(dd_cmd),
                 'timestamp': datetime.now().isoformat(),
                 'note': 'Using /proc/kcore - may not capture all physical memory'
             }
@@ -331,6 +331,14 @@ class MemoryAnalysis:
             ]
 
             self.logger.info(f"Extraction command: {' '.join(vol_cmd)}")
+
+            # Execute volatility command
+            result = subprocess.run(vol_cmd, capture_output=True, text=True, timeout=300)
+
+            if result.returncode != 0:
+                raise Exception(f"Process extraction failed: {result.stderr}")
+
+            self.logger.info(f"Process memory extraction completed for PID {pid}")
 
             return {
                 'success': True,
