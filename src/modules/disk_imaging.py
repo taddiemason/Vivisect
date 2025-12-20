@@ -65,9 +65,11 @@ class DiskImaging:
 
             self.logger.info(f"Running command: {' '.join(dd_cmd)}")
 
-            # Execute dd (this would run in production)
-            # For safety, we'll just log the command
-            # result = subprocess.run(dd_cmd, check=True, capture_output=True, text=True)
+            # Execute dd
+            result = subprocess.run(dd_cmd, capture_output=True, text=True, timeout=None)
+
+            if result.returncode != 0:
+                raise Exception(f"dd command failed: {result.stderr}")
 
             # Calculate hash of the image
             image_hash = self._calculate_file_hash(output_path) if os.path.exists(output_path) else None
@@ -111,6 +113,12 @@ class DiskImaging:
 
             self.logger.info(f"Command: {' '.join(dcfldd_cmd)}")
 
+            # Execute dcfldd
+            result = subprocess.run(dcfldd_cmd, capture_output=True, text=True, timeout=None)
+
+            if result.returncode != 0:
+                raise Exception(f"dcfldd command failed: {result.stderr}")
+
             result_info = {
                 'success': True,
                 'source': source_device,
@@ -120,6 +128,7 @@ class DiskImaging:
                 'command': ' '.join(dcfldd_cmd)
             }
 
+            self.logger.info(f"dcfldd imaging completed: {output_path}")
             return result_info
 
         except Exception as e:
@@ -189,8 +198,14 @@ class DiskImaging:
                 output_prefix
             ]
 
-            # Log command (would execute in production)
+            # Execute split command
             self.logger.info(f"Split command: {' '.join(split_cmd)}")
+            result = subprocess.run(split_cmd, capture_output=True, text=True, timeout=None)
+
+            if result.returncode != 0:
+                raise Exception(f"split command failed: {result.stderr}")
+
+            self.logger.info("Image split completed successfully")
 
             return {
                 'success': True,
