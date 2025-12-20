@@ -67,7 +67,7 @@
 ```bash
 # Clone the repository
 git clone https://github.com/taddiemason/Vivisect
-cd vivisect
+cd Vivisect
 
 # Make installation script executable
 chmod +x scripts/install.sh
@@ -259,7 +259,7 @@ vivisect report CASE-2024-001 --format json
 vivisect report CASE-2024-001 --format txt
 ```
 
-### 📊 Enhanced Reporting with Visualization
+###  Enhanced Reporting with Visualization
 
 Vivisect now includes **enhanced HTML reports** with interactive visualizations powered by Chart.js:
 
