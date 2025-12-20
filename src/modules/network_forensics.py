@@ -75,6 +75,21 @@ class NetworkForensics:
 
             self.logger.info(f"Capture command: {' '.join(tcpdump_cmd)}")
 
+            # Execute tcpdump
+            # Note: For long captures, this should be run in background
+            timeout_duration = duration + 10 if duration else None
+            process = subprocess.run(
+                tcpdump_cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout_duration
+            )
+
+            if process.returncode != 0:
+                raise Exception(f"tcpdump command failed: {process.stderr}")
+
+            self.logger.info(f"Packet capture completed: {output_path}")
+
             result = {
                 'success': True,
                 'interface': interface,
@@ -238,6 +253,19 @@ class NetworkForensics:
             ]
 
             self.logger.info(f"Export command: {' '.join(export_cmd)}")
+
+            # Execute tshark export
+            process = subprocess.run(
+                export_cmd,
+                capture_output=True,
+                text=True,
+                timeout=120
+            )
+
+            if process.returncode != 0:
+                self.logger.warning(f"tshark export warning: {process.stderr}")
+
+            self.logger.info(f"File extraction completed")
 
             result = {
                 'success': True,
