@@ -92,10 +92,13 @@ def create_app():
             method = data.get('method', 'dd')
 
             def run_imaging():
-                if method == 'dd':
-                    result = disk_imaging.create_image_dd(device, output)
-                else:
-                    result = disk_imaging.create_image_dcfldd(device, output)
+                try:
+                    if method == 'dd':
+                        result = disk_imaging.create_image_dd(device, output)
+                    else:
+                        result = disk_imaging.create_image_dcfldd(device, output)
+                except Exception as e:
+                    result = {'success': False, 'error': str(e)}
 
                 socketio.emit('task_complete', {
                     'task': 'disk_image',
@@ -129,9 +132,13 @@ def create_app():
             duration = data.get('duration', 60)
 
             def run_capture():
-                result = network_forensics.capture_traffic(
-                    interface, output, duration=duration
-                )
+                try:
+                    result = network_forensics.capture_traffic(
+                        interface, output, duration=duration
+                    )
+                except Exception as e:
+                    result = {'success': False, 'error': str(e)}
+
                 socketio.emit('task_complete', {
                     'task': 'network_capture',
                     'result': result
@@ -163,7 +170,11 @@ def create_app():
             method = data.get('method', 'auto')
 
             def run_dump():
-                result = memory_analysis.create_memory_dump(output, method)
+                try:
+                    result = memory_analysis.create_memory_dump(output, method)
+                except Exception as e:
+                    result = {'success': False, 'error': str(e)}
+
                 socketio.emit('task_complete', {
                     'task': 'memory_dump',
                     'result': result
