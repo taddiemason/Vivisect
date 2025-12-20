@@ -11,7 +11,13 @@
     <div class="container">
         <!-- Header -->
         <header class="header">
-            <h1>🔍 Vivisect Forensics</h1>
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <img src="{{ url_for('static', filename='images/synetica-logo.png') }}"
+                     alt="Synetica"
+                     style="height: 40px; width: auto;"
+                     onerror="this.style.display='none'">
+                <h1>🔍 Vivisect Forensics</h1>
+            </div>
             <div class="status-bar">
                 <span id="status-indicator" class="status-dot"></span>
                 <span id="status-text">Initializing...</span>
@@ -329,6 +335,23 @@
                 <p id="progress-text">Please wait...</p>
             </div>
         </div>
+
+        <!-- Footer -->
+        <footer style="margin-top: 40px; padding: 20px; text-align: center; border-top: 1px solid #e2e8f0; color: #64748b;">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 10px;">
+                <span style="font-size: 0.9em;">Powered by</span>
+                <img src="{{ url_for('static', filename='images/synetica-logo.png') }}"
+                     alt="Synetica"
+                     style="height: 24px; width: auto;"
+                     onerror="this.style.display='none'">
+            </div>
+            <p style="font-size: 0.85em; margin: 5px 0;">
+                Vivisect Digital Forensics Suite &copy; 2024 Synetica
+            </p>
+            <p style="font-size: 0.75em; margin: 5px 0;">
+                Professional forensics tools for authorized use only
+            </p>
+        </footer>
     </div>
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
