@@ -254,7 +254,8 @@ def create_app():
                 report = report_gen.create_report(case_id)
 
                 # Memory analysis
-                socketio.emit('progress', {'step': 'memory', 'status': 'running'})
+                with app.app_context():
+                    socketio.emit('progress', {'step': 'memory', 'status': 'running'}, namespace='/')
                 memory_data = memory_analysis.analyze_running_system()
                 report_gen.add_finding(report, 'memory', {
                     'type': 'live_analysis',
@@ -262,7 +263,8 @@ def create_app():
                 })
 
                 # Browser artifacts
-                socketio.emit('progress', {'step': 'browser', 'status': 'running'})
+                with app.app_context():
+                    socketio.emit('progress', {'step': 'browser', 'status': 'running'}, namespace='/')
                 browser_data = artifact_extraction.extract_browser_history()
                 report_gen.add_finding(report, 'artifacts', {
                     'type': 'browser',
@@ -270,7 +272,8 @@ def create_app():
                 })
 
                 # System logs
-                socketio.emit('progress', {'step': 'logs', 'status': 'running'})
+                with app.app_context():
+                    socketio.emit('progress', {'step': 'logs', 'status': 'running'}, namespace='/')
                 logs_data = artifact_extraction.extract_system_logs()
                 report_gen.add_finding(report, 'artifacts', {
                     'type': 'logs',
@@ -278,7 +281,8 @@ def create_app():
                 })
 
                 # Persistence
-                socketio.emit('progress', {'step': 'persistence', 'status': 'running'})
+                with app.app_context():
+                    socketio.emit('progress', {'step': 'persistence', 'status': 'running'}, namespace='/')
                 persist_data = artifact_extraction.extract_persistence_mechanisms()
                 report_gen.add_finding(report, 'artifacts', {
                     'type': 'persistence',
@@ -289,14 +293,15 @@ def create_app():
                 json_report = report_gen.save_report(report, 'json')
                 html_report = report_gen.save_report(report, 'html')
 
-                socketio.emit('task_complete', {
-                    'task': 'collection',
-                    'result': {
-                        'case_id': case_id,
-                        'json_report': json_report,
-                        'html_report': html_report
-                    }
-                })
+                with app.app_context():
+                    socketio.emit('task_complete', {
+                        'task': 'collection',
+                        'result': {
+                            'case_id': case_id,
+                            'json_report': json_report,
+                            'html_report': html_report
+                        }
+                    }, namespace='/')
 
             task_id = f"collection_{datetime.now().timestamp()}"
             active_tasks[task_id] = threading.Thread(target=run_full_collection)
@@ -389,11 +394,16 @@ def create_app():
         """Sync reports to USB mass storage"""
         try:
             def run_sync():
-                result = usb_gadget.sync_reports_to_storage()
-                socketio.emit('task_complete', {
-                    'task': 'mass_storage_sync',
-                    'result': result
-                })
+                try:
+                    result = usb_gadget.sync_reports_to_storage()
+                except Exception as e:
+                    result = {'success': False, 'error': str(e)}
+
+                with app.app_context():
+                    socketio.emit('task_complete', {
+                        'task': 'mass_storage_sync',
+                        'result': result
+                    }, namespace='/')
 
             task_id = f"mass_storage_sync_{datetime.now().timestamp()}"
             active_tasks[task_id] = threading.Thread(target=run_sync)
@@ -462,11 +472,16 @@ def create_app():
             output_file = data.get('output_file')
 
             def run_capture():
-                result = usb_gadget.start_packet_capture(output_file)
-                socketio.emit('task_complete', {
-                    'task': 'usb_capture',
-                    'result': result
-                })
+                try:
+                    result = usb_gadget.start_packet_capture(output_file)
+                except Exception as e:
+                    result = {'success': False, 'error': str(e)}
+
+                with app.app_context():
+                    socketio.emit('task_complete', {
+                        'task': 'usb_capture',
+                        'result': result
+                    }, namespace='/')
 
             task_id = f"usb_capture_{datetime.now().timestamp()}"
             active_tasks[task_id] = threading.Thread(target=run_capture)
@@ -481,11 +496,16 @@ def create_app():
         """Start automatic collection on USB connection"""
         try:
             def run_auto_collect():
-                result = usb_gadget.auto_collect_on_connection()
-                socketio.emit('task_complete', {
-                    'task': 'usb_auto_collect',
-                    'result': result
-                })
+                try:
+                    result = usb_gadget.auto_collect_on_connection()
+                except Exception as e:
+                    result = {'success': False, 'error': str(e)}
+
+                with app.app_context():
+                    socketio.emit('task_complete', {
+                        'task': 'usb_auto_collect',
+                        'result': result
+                    }, namespace='/')
 
             task_id = f"usb_auto_collect_{datetime.now().timestamp()}"
             active_tasks[task_id] = threading.Thread(target=run_auto_collect)
@@ -541,11 +561,16 @@ def create_app():
                 return jsonify({'error': 'Text too long (max 500 characters)'}), 400
 
             def run_hid_string():
-                result = usb_gadget.send_hid_string(text, delay_ms=delay_ms)
-                socketio.emit('task_complete', {
-                    'task': 'hid_send_string',
-                    'result': result
-                })
+                try:
+                    result = usb_gadget.send_hid_string(text, delay_ms=delay_ms)
+                except Exception as e:
+                    result = {'success': False, 'error': str(e)}
+
+                with app.app_context():
+                    socketio.emit('task_complete', {
+                        'task': 'hid_send_string',
+                        'result': result
+                    }, namespace='/')
 
             task_id = f"hid_string_{datetime.now().timestamp()}"
             active_tasks[task_id] = threading.Thread(target=run_hid_string)
@@ -570,11 +595,16 @@ def create_app():
                 return jsonify({'error': 'No payload name provided'}), 400
 
             def run_hid_payload():
-                result = usb_gadget.execute_hid_payload(payload_name)
-                socketio.emit('task_complete', {
-                    'task': 'hid_execute_payload',
-                    'result': result
-                })
+                try:
+                    result = usb_gadget.execute_hid_payload(payload_name)
+                except Exception as e:
+                    result = {'success': False, 'error': str(e)}
+
+                with app.app_context():
+                    socketio.emit('task_complete', {
+                        'task': 'hid_execute_payload',
+                        'result': result
+                    }, namespace='/')
 
             task_id = f"hid_payload_{datetime.now().timestamp()}"
             active_tasks[task_id] = threading.Thread(target=run_hid_payload)
