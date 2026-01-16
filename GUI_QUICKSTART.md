@@ -1,6 +1,6 @@
 # Vivisect GUI - Quick Start for Onboard Display
 
-## 🖥️ What You Get
+##  What You Get
 
 A **full-screen forensics interface** that launches automatically on your device's onboard screen.
 
@@ -17,7 +17,7 @@ sudo reboot
 
 **That's it!** The GUI will launch automatically in full-screen kiosk mode.
 
-## 🎯 What You See on the Screen
+##  What You See on the Screen
 
 ### Main Dashboard
 ```
@@ -26,22 +26,22 @@ sudo reboot
 ├─────────────────────────────────────────────────────┤
 │  [Dashboard] [Disk] [Network] [Memory] [Artifacts]  │
 ├─────────────────────────────────────────────────────┤
-│                                                      │
-│  ┌──────────────────┐  ┌──────────────────┐        │
-│  │ Quick Collection │  │  System Status    │        │
-│  │                  │  │  Active: 0        │        │
-│  │  [Case ID]       │  │  Output: /var/... │        │
-│  │                  │  │                   │        │
-│  │ [Start          │  └──────────────────┘        │
-│  │  Collection]    │                                │
-│  └──────────────────┘  ┌──────────────────┐        │
-│                        │  Quick Actions    │        │
-│  ┌──────────────────┐  │                   │        │
-│  │  Activity Log    │  │  [Analyze Memory] │        │
-│  │  Connected...    │  │  [Extract Browser]│        │
-│  │  System ready    │  │  [System Logs]    │        │
-│  └──────────────────┘  └──────────────────┘        │
-│                                                      │
+│                                                     │
+│  ┌──────────────────┐  ┌──────────────────┐         │
+│  │ Quick Collection │  │  System Status   │         │
+│  │                  │  │  Active: 0       │         │
+│  │  [Case ID]       │  │  Output: /var/...│         │
+│  │                  │  │                  │         │
+│  │ [Start           │  └──────────────────┘         │
+│  │  Collection]     │                               │
+│  └──────────────────┘  ┌──────────────────┐         │
+│                        │  Quick Actions   │         │
+│  ┌──────────────────┐  │                  │         │
+│  │  Activity Log    │  │ [Analyze Memory] │         │
+│  │  Connected...    │  │ [Extract Browser]│         │
+│  │  System ready    │  │ [System Logs]    │         │
+│  └──────────────────┘  └──────────────────┘         │
+│                                                     │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -52,7 +52,7 @@ sudo reboot
 - **Tab Navigation**: Switch between modules
 - **Dark Theme**: Reduces eye strain
 
-## 📱 Using the Touch Screen
+##  Using the Touch Screen
 
 ### Run Forensics Collection
 1. **Tap** "Dashboard" tab
@@ -87,17 +87,17 @@ sudo reboot
    - Persistence Mechanisms
 3. View results on screen
 
-## 🔌 Physical Setup
+##  Physical Setup
 
 ### For Portable Forensics Device
 
 ```
 ┌─────────────────────────────────────┐
-│  Forensics Device (Debian/Kali)    │
-│  ┌──────────────────────────────┐  │
-│  │  7"+ Touchscreen Display     │  │  ← GUI shows here
-│  │  1920x1080 recommended       │  │
-│  └──────────────────────────────┘  │
+│  Forensics Device (Debian/Kali)     │
+│  ┌──────────────────────────────┐   │
+│  │  7"+ Touchscreen Display     │   │  ← GUI shows here
+│  │  1920x1080 recommended       │   │
+│  └──────────────────────────────┘   │
 │                                     │
 │  ● Power Button                     │
 │  ● USB Ports (for evidence drives)  │
@@ -111,7 +111,7 @@ sudo reboot
 3. Vivisect GUI launches in full-screen
 4. Touchscreen ready for forensics work
 
-## 🌐 Access from Other Computers
+##  Access from Other Computers
 
 The GUI is also accessible from browsers on your network:
 
@@ -125,7 +125,7 @@ http://[device-ip]:5000
 
 Example: `http://192.168.1.100:5000`
 
-## 🎛️ Manual Control
+##  Manual Control
 
 ### Start GUI Manually
 ```bash
@@ -154,7 +154,7 @@ sudo systemctl enable vivisect-gui
 sudo systemctl disable vivisect-gui
 ```
 
-## 📊 Typical Workflow
+##  Typical Workflow
 
 ### Field Forensics Collection
 
@@ -194,7 +194,7 @@ sudo systemctl disable vivisect-gui
 6. View all results on dashboard
 ```
 
-## 🔧 Customization
+##  Customization
 
 ### Change Display Resolution
 
@@ -222,7 +222,7 @@ unclutter -display $DISPLAY_NUM -idle 3 -root &
 unclutter -display $DISPLAY_NUM -idle 0 -root &
 ```
 
-## 💡 Pro Tips
+##  Pro Tips
 
 1. **Quick Reboot**: If GUI freezes, SSH in and:
    ```bash
@@ -240,14 +240,14 @@ unclutter -display $DISPLAY_NUM -idle 0 -root &
    echo 50 > /sys/class/backlight/*/brightness  # 0-100
    ```
 
-## ⚠️ Important Notes
+##  Important Notes
 
 - **Root Required**: GUI runs as root for forensics access
 - **Firewall**: Port 5000 is open on all interfaces
 - **No Auth Yet**: No password protection (physical security important!)
 - **Single User**: One operator at a time
 
-## 🆘 Troubleshooting
+##  Troubleshooting
 
 ### Black Screen on Boot
 ```bash
@@ -278,7 +278,7 @@ sudo ufw allow 5000
 sudo netstat -tulpn | grep 5000
 ```
 
-## 📦 Hardware Recommendations
+##  Hardware Recommendations
 
 ### Budget Build (~$200)
 - Raspberry Pi 4 (4GB RAM)
@@ -297,16 +297,16 @@ sudo netstat -tulpn | grep 5000
 - Pre-installed and hardened
 - Field-ready
 
-## 🚀 Next Steps
+##  Next Steps
 
-1. ✅ Install Vivisect with GUI
-2. ✅ Enable kiosk mode
-3. ✅ Reboot and test
-4. 📖 Read [GUI_README.md](GUI_README.md) for advanced features
-5. 🔒 Configure firewall for your network
-6. 📝 Create case templates
-7. 🎯 Deploy in field!
+1.  Install Vivisect with GUI
+2.  Enable kiosk mode
+3.  Reboot and test
+4.  Read [GUI_README.md](GUI_README.md) for advanced features
+5.  Configure firewall for your network
+6.  Create case templates
+7.  Deploy in field!
 
 ---
 
-**The GUI makes Vivisect forensics accessible with just a tap!** 🎯
+**The GUI makes Vivisect forensics accessible with just a tap!** 
