@@ -6,11 +6,11 @@ This guide explains how to use the Vivisect Web GUI, especially for devices with
 
 The Vivisect Web GUI provides:
 
-✅ **Touch-Friendly Interface** - Optimized for touchscreen displays
-✅ **Kiosk Mode** - Full-screen forensics interface on device boot
-✅ **Real-Time Updates** - Live progress tracking via WebSockets
-✅ **Dashboard** - Quick access to all forensics modules
-✅ **Remote Access** - Access from any browser on the network
+ **Touch-Friendly Interface** - Optimized for touchscreen displays
+ **Kiosk Mode** - Full-screen forensics interface on device boot
+ **Real-Time Updates** - Live progress tracking via WebSockets
+ **Dashboard** - Quick access to all forensics modules
+ **Remote Access** - Access from any browser on the network
 
 ## Installation
 
@@ -257,7 +257,7 @@ xinput_calibrator
 
 ## Security Considerations
 
-⚠️ **Important**: The web GUI runs with root privileges to access forensics data.
+ **Important**: The web GUI runs with root privileges to access forensics data.
 
 **Security Best Practices:**
 
