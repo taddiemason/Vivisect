@@ -8,30 +8,30 @@ USB Gadget Mode allows your Vivisect device (especially Raspberry Pi Zero/4) to 
 2. **USB Mass Storage** - Drive for accessing reports/evidence
 3. **USB Serial Console** - Terminal access for CLI control
 
-## 🎯 What It Does
+##  What It Does
 
 ```
-┌─────────────────────────────────────────┐
-│   Target PC                             │
-│                                         │
-│   USB Port ──────────────────────────┐  │
-└───────────────────────────────────────┼──┘
+ ┌─────────────────────────────────────────┐
+ │   Target PC                             │
+ │                                         │
+ │   USB Port ──────────────────────────┐  │
+ └──────────────────────────────────────┼──┘
                                         │ USB Cable
                                         │
                    ┌────────────────────▼─────────────────────┐
                    │  Vivisect Device (Raspberry Pi Zero)     │
                    │                                          │
-                   │  ✅ USB Ethernet Adapter (usb0)         │
-                   │     - Captures network traffic          │
-                   │     - IP: 10.55.0.2                     │
+                   │   USB Ethernet Adapter (usb0)            │
+                   │     - Captures network traffic           │
+                   │     - IP: 10.55.0.2                      │
                    │                                          │
-                   │  💾 USB Mass Storage (512MB)            │
-                   │     - Reports & evidence access         │
-                   │     - Auto-synced                       │
+                   │   USB Mass Storage (512MB)               │
+                   │     - Reports & evidence access          │
+                   │     - Auto-synced                        │
                    │                                          │
-                   │  ⌨️  USB Serial Console (/dev/ttyGS0)   │
-                   │     - CLI access (115200 baud)          │
-                   │     - Remote control                    │
+                   │    USB Serial Console (/dev/ttyGS0)      │
+                   │     - CLI access (115200 baud)           │
+                   │     - Remote control                     │
                    └──────────────────────────────────────────┘
 ```
 
@@ -49,7 +49,7 @@ USB Gadget Mode allows your Vivisect device (especially Raspberry Pi Zero/4) to 
 
 ---
 
-## 🔧 Installation
+##  Installation
 
 ### Prerequisites
 
@@ -98,7 +98,7 @@ ls -l /dev/ttyGS0
 
 ---
 
-## 🚀 Usage
+##  Usage
 
 ### Quick Start
 
@@ -120,7 +120,7 @@ sudo reboot
 - Packet capture starts
 
 **4. Check GUI**
-- Dashboard shows: ✅ Connected to Host PC
+- Dashboard shows:  Connected to Host PC
 - Automatic collection begins
 - Traffic logged to `/var/lib/vivisect/output/`
 
@@ -156,7 +156,7 @@ sudo kill $(cat /var/run/usb-capture.pid)
 
 ---
 
-## 🔧 Multi-Function Features
+##  Multi-Function Features
 
 ### USB Mass Storage
 
@@ -258,7 +258,7 @@ vivisect network --capture-live usb0 --duration 300
 
 ---
 
-## 🔄 Mode Switching
+##  Mode Switching
 
 Vivisect supports switching between different USB gadget modes without rebooting. Choose the mode that best fits your workflow.
 
@@ -298,10 +298,10 @@ sudo /path/to/Vivisect/scripts/usb-mode-switch.sh network
 2. Navigate to **Dashboard**
 3. Find **USB Gadget Mode** card
 4. Click desired mode button:
-   - **🔧 Multi-Function** - All three functions
-   - **💾 USB Drive (RW)** - Flash drive read-write
-   - **🔒 USB Drive (RO)** - Flash drive read-only
-   - **🌐 Network Only** - USB Ethernet
+   - ** Multi-Function** - All three functions
+   - ** USB Drive (RW)** - Flash drive read-write
+   - ** USB Drive (RO)** - Flash drive read-only
+   - ** Network Only** - USB Ethernet
 
 Mode switches take 2-5 seconds. The host PC will see a brief disconnect/reconnect.
 
@@ -380,7 +380,7 @@ Mac:
 
 ---
 
-## 📊 Configuration
+##  Configuration
 
 ### Network Configuration
 
@@ -414,25 +414,25 @@ Edit `/etc/vivisect/vivisect.conf`:
 
 ---
 
-## 🔍 What Gets Captured
+##  What Gets Captured
 
 ### Automatically Collected Data
 
 When you plug into a target PC:
 
-✅ **Network Traffic**
+ **Network Traffic**
 - All TCP/IP packets on `usb0`
 - HTTP/HTTPS connections
 - DNS queries
 - ARP table
 
-✅ **Host Information**
+ **Host Information**
 - Host MAC address
 - IP address
 - Network connections
 - Open ports (if scanning enabled)
 
-✅ **Timeline**
+ **Timeline**
 - Connection timestamp
 - Traffic volume
 - Disconnection time
@@ -449,7 +449,7 @@ USB_20241211_143022_report.html   - HTML report
 
 ---
 
-## 💡 Use Cases
+##  Use Cases
 
 ### 1. Network Traffic Monitoring
 
@@ -497,7 +497,7 @@ Scenario: Analyze what a PC is communicating with
 
 ---
 
-## 🛠️ Troubleshooting
+##  Troubleshooting
 
 ### Device Not Detected by Host PC
 
@@ -585,21 +585,21 @@ sudo tcpdump -i usb0 -w /tmp/test-capture.pcap
 
 ---
 
-## 🔒 Security Considerations
+##  Security Considerations
 
 ### Authorized Use Only
 
-⚠️ **WARNING**: USB Gadget Mode is designed for:
+ **WARNING**: USB Gadget Mode is designed for:
 - Authorized penetration testing
 - Legal forensics investigations
 - Security research with permission
 - Incident response on owned systems
 
 **Illegal uses:**
-- ❌ Unauthorized surveillance
-- ❌ Corporate espionage
-- ❌ Privacy violations
-- ❌ Unauthorized network monitoring
+-  Unauthorized surveillance
+-  Corporate espionage
+-  Privacy violations
+-  Unauthorized network monitoring
 
 ### Detection Considerations
 
@@ -636,7 +636,7 @@ sudo chmod 700 /var/lib/vivisect/output
 
 ---
 
-## 🎛️ Advanced Features
+##  Advanced Features
 
 ### Man-in-the-Middle Mode
 
@@ -684,7 +684,7 @@ curl -X POST https://your-server.com/api/alert \
 
 ---
 
-## 📈 Performance
+##  Performance
 
 ### Raspberry Pi Zero W
 
@@ -702,7 +702,7 @@ curl -X POST https://your-server.com/api/alert \
 
 ---
 
-## 📝 Example Scenarios
+##  Example Scenarios
 
 ### Scenario 1: Malware C2 Detection
 
@@ -749,7 +749,7 @@ cp USB_baseline_capture.pcap /evidence/baselines/
 
 ---
 
-## 🔄 Updates & Maintenance
+##  Updates & Maintenance
 
 ### Update USB Gadget Configuration
 
@@ -774,7 +774,7 @@ sudo systemctl restart usb-gadget-monitor
 
 ---
 
-## 🆘 Support
+##  Support
 
 ### Getting Help
 
@@ -815,7 +815,7 @@ journalctl -u usb-gadget-monitor -f
 
 ---
 
-## 📚 Additional Resources
+##  Additional Resources
 
 - **Main Documentation:** [README.md](README.md)
 - **GUI Guide:** [GUI_README.md](GUI_README.md)
@@ -825,16 +825,16 @@ journalctl -u usb-gadget-monitor -f
 
 ## ⌨️ HID Keyboard Mode (Advanced - Requires Authorization)
 
-### ⚠️ CRITICAL SECURITY WARNING ⚠️
+###  CRITICAL SECURITY WARNING 
 
 **HID Keyboard Mode enables automated keystroke injection (BadUSB functionality).**
 
 This feature is ONLY for:
-- ✅ Authorized penetration testing with written permission
-- ✅ Digital forensics and incident response (with authorization)
-- ✅ CTF competitions and security research
-- ✅ Educational purposes on systems you own
-- ✅ Automated forensics triage on authorized systems
+-  Authorized penetration testing with written permission
+-  Digital forensics and incident response (with authorization)
+-  CTF competitions and security research
+-  Educational purposes on systems you own
+-  Automated forensics triage on authorized systems
 
 **NEVER use HID mode without explicit written authorization.**
 Unauthorized access is illegal and unethical.
@@ -1019,18 +1019,18 @@ sudo /usr/local/bin/setup-hid-gadget
 HID mode is a powerful dual-use tool. With great power comes great responsibility:
 
 **Legitimate Uses:**
-- ✅ Authorized penetration testing engagements
-- ✅ Incident response and forensics (with permission)
-- ✅ Security research and vulnerability disclosure
-- ✅ Educational training on owned systems
-- ✅ CTF competitions and red team exercises
+-  Authorized penetration testing engagements
+-  Incident response and forensics (with permission)
+-  Security research and vulnerability disclosure
+-  Educational training on owned systems
+-  CTF competitions and red team exercises
 
 **Prohibited Uses:**
-- ❌ Unauthorized access to any system
-- ❌ Malware delivery or credential theft
-- ❌ Privacy violations
-- ❌ Corporate espionage
-- ❌ Any use without explicit permission
+-  Unauthorized access to any system
+-  Malware delivery or credential theft
+-  Privacy violations
+-  Corporate espionage
+-  Any use without explicit permission
 
 **If in doubt, don't use it.** Always err on the side of caution and obtain proper authorization.
 
@@ -1046,7 +1046,7 @@ By using HID mode, you agree to:
 
 ---
 
-## ⚖️ Legal & Ethical Use
+##  Legal & Ethical Use
 
 **Remember:**
 - Always obtain proper authorization
