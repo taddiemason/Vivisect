@@ -516,12 +516,12 @@ For issues, questions, or contributions:
 
 ## Roadmap
 
-### ✅ Completed
+###  Completed
 - [x] Enhanced reporting with visualization
 - [x] Timeline visualization
 - [x] Web-based GUI
 
-### 🚧 Planned
+###  Planned
 - [ ] Windows artifact support (via Wine/mounted NTFS)
 - [ ] REST API for remote operations
 - [ ] Plugin system for custom modules
