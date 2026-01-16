@@ -4,4 +4,4 @@ A comprehensive digital forensics platform for Debian systems
 """
 
 __version__ = "1.0.0"
-__author__ = "Vivisect Team"
+__author__ = "Zach Lalime"
