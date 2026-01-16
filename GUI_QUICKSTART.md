@@ -4,7 +4,7 @@
 
 A **full-screen forensics interface** that launches automatically on your device's onboard screen.
 
-## ⚡ Quick Setup (2 Commands)
+##  Quick Setup (2 Commands)
 
 ```bash
 # 1. Install Vivisect with GUI
