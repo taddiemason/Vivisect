@@ -8,9 +8,9 @@ This PR implements comprehensive USB gadget mode functionality for Vivisect, tra
 
 ### 1. Multi-Function USB Gadget Mode (Priority 1)
 **Provides three USB functions simultaneously:**
-- ✅ **USB Ethernet** (Network forensics and remote access)
-- ✅ **USB Mass Storage** (512MB FAT32 drive for reports/evidence)
-- ✅ **USB Serial Console** (CLI access via /dev/ttyGS0)
+-  **USB Ethernet** (Network forensics and remote access)
+-  **USB Mass Storage** (512MB FAT32 drive for reports/evidence)
+-  **USB Serial Console** (CLI access via /dev/ttyGS0)
 
 **Implementation:**
 - Updated setup-usb-gadget.sh to use g_multi kernel module
@@ -21,10 +21,10 @@ This PR implements comprehensive USB gadget mode functionality for Vivisect, tra
 
 ### 2. Dynamic Mode Switching (Priority 2)
 **Switch between USB modes without reboot:**
-- 🔧 **Multi-Function** - All three functions enabled
-- 💾 **Mass Storage (RW)** - USB flash drive with read-write access
-- 🔒 **Mass Storage (RO)** - Forensically sound read-only mode
-- 🌐 **Network Only** - USB Ethernet adapter
+-  **Multi-Function** - All three functions enabled
+-  **Mass Storage (RW)** - USB flash drive with read-write access
+-  **Mass Storage (RO)** - Forensically sound read-only mode
+-  **Network Only** - USB Ethernet adapter
 
 **Implementation:**
 - CLI tool: scripts/usb-mode-switch.sh for quick switching
@@ -33,7 +33,7 @@ This PR implements comprehensive USB gadget mode functionality for Vivisect, tra
 - Current mode detection and status reporting
 
 ### 3. HID Keyboard Mode (Priority 3)
-**⚠️ SECURITY: Automated keystroke injection for authorized testing only**
+**SECURITY: Automated keystroke injection for authorized testing only**
 
 **Features:**
 - USB HID keyboard emulation via configfs
@@ -43,11 +43,11 @@ This PR implements comprehensive USB gadget mode functionality for Vivisect, tra
 - Full US keyboard layout support (65+ characters)
 
 **Security Controls:**
-- 🔴 Multiple authorization checkpoints in setup script
-- 🔴 Explicit "yes" confirmation required
-- 🔴 Syslog logging of all HID operations
-- 🔴 Comprehensive legal warnings and disclaimers
-- 🔴 Clear distinction between authorized/prohibited uses
+-  Multiple authorization checkpoints in setup script
+-  Explicit "yes" confirmation required
+-  Syslog logging of all HID operations
+-  Comprehensive legal warnings and disclaimers
+-  Clear distinction between authorized/prohibited uses
 
 ### 4. HID Keyboard GUI (Latest Addition)
 **Web interface for HID operations with prominent security warnings:**
@@ -70,11 +70,7 @@ This PR implements comprehensive USB gadget mode functionality for Vivisect, tra
 ## Security Considerations
 
 ### HID Mode Restrictions
-- ⚠️ **ONLY for authorized security testing and forensics**
-- ⚠️ Requires explicit written permission
-- ⚠️ All operations logged for accountability
-- ⚠️ Unauthorized use may be illegal
-
----
-
-**By merging this PR, Vivisect gains comprehensive USB gadget capabilities with strong security controls for authorized security testing and digital forensics operations.**
+-  **ONLY for authorized security testing and forensics**
+-  Requires explicit written permission
+-  All operations logged for accountability
+-  Unauthorized use may be illegal
