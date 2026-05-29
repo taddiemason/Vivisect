@@ -32,10 +32,16 @@ setup(
             'pefile>=2023.2.7',
             'pyelftools>=0.29',
         ],
+        # Native (no-browser, no-network) GUI. Installed separately so the base
+        # forensics install never pulls a web/GUI stack.
+        'gui': [
+            'kivy>=2.3.0',
+        ],
     },
     entry_points={
         'console_scripts': [
             'vivisect=cli:main',
+            'vivisect-gui-native=gui.app:main',
         ],
     },
     classifiers=[

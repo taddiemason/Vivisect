@@ -1,5 +1,11 @@
 # Vivisect Web GUI - Onboard Display Mode
 
+> **Note:** A **native GUI** (Kivy, no browser, no network listener) is now the
+> default for onboard displays and kiosk mode — see **[GUI_NATIVE.md](GUI_NATIVE.md)**.
+> The web GUI documented below still exists but must be started explicitly; it is
+> **not** launched by the kiosk service anymore. For a hardened forensics device,
+> prefer the native GUI, which opens no TCP port.
+
 This guide explains how to use the Vivisect Web GUI, especially for devices with onboard displays.
 
 ## Features

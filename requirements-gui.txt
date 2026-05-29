@@ -1,0 +1,8 @@
+# Native GUI dependencies (no-browser, no-network frontend).
+#
+# Install only on devices that need the onboard/desktop GUI:
+#   pip install -r requirements.txt -r requirements-gui.txt
+#
+# The base requirements.txt (Flask/Socket.IO web GUI) is NOT needed for the
+# native GUI and can be omitted on a hardened forensics device.
+kivy>=2.3.0

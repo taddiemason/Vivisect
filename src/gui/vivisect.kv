@@ -1,0 +1,24 @@
+#:import theme gui.theme
+
+# Flat, role-colored touch button.
+<BigButton>:
+    background_normal: ''
+    background_down: ''
+    background_disabled_normal: ''
+    background_color: ((theme.ACCENT_DOWN if self.state == 'down' else theme.ACCENT) if self.role == 'primary' else (theme.DANGER_DOWN if self.state == 'down' else theme.DANGER) if self.role == 'danger' else (theme.BG if self.state == 'down' else theme.SURFACE_ALT))
+    color: theme.TEXT
+    disabled_color: theme.MUTED
+    font_size: theme.BODY_FS
+    bold: True
+    size_hint_y: None
+    height: theme.BTN_HEIGHT
+
+# Rounded card surface; title + body are added in Python.
+<SectionCard>:
+    canvas.before:
+        Color:
+            rgba: theme.SURFACE
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [theme.RADIUS]
