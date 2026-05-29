@@ -3,6 +3,13 @@
     "log_dir": "/var/log/vivisect",
     "temp_dir": "/tmp/vivisect",
     "auto_start": true,
+    "web": {
+        "host": "127.0.0.1",
+        "port": 5000,
+        "auth_token": "",
+        "allowed_origins": ["http://127.0.0.1:5000", "http://localhost:5000"],
+        "trust_loopback": true
+    },
     "modules": {
         "disk_imaging": {
             "enabled": true,

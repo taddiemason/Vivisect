@@ -20,15 +20,40 @@ from modules import (
     ArtifactExtraction,
     USBGadget
 )
+from web.security import (
+    resolve_token,
+    install_auth,
+    is_loopback,
+    token_matches,
+    extract_token,
+    safe_path,
+)
 
 def create_app():
     """Create and configure Flask application"""
     app = Flask(__name__)
     app.config['SECRET_KEY'] = os.urandom(24)
-    socketio = SocketIO(app, cors_allowed_origins="*")
 
     # Initialize Vivisect components
     config = Config()
+
+    # ── Web security ────────────────────────────────────────────────────────
+    # Resolve the API token and lock down CORS/WebSocket origins. The token
+    # gates the JSON API for any non-loopback client (see web/security.py).
+    auth_token, token_generated = resolve_token(config)
+    trust_loopback = bool(config.get('web.trust_loopback', True))
+    allowed_origins = config.get('web.allowed_origins') or [
+        'http://127.0.0.1:5000', 'http://localhost:5000'
+    ]
+
+    app.config['VIVISECT_TOKEN'] = auth_token
+    app.config['VIVISECT_TOKEN_GENERATED'] = token_generated
+    app.config['VIVISECT_HOST'] = config.get('web.host', '127.0.0.1')
+    app.config['VIVISECT_PORT'] = int(config.get('web.port', 5000))
+    app.config['VIVISECT_TRUST_LOOPBACK'] = trust_loopback
+
+    socketio = SocketIO(app, cors_allowed_origins=allowed_origins)
+    install_auth(app, auth_token, trust_loopback=trust_loopback)
     logger = ForensicsLogger(config.get('log_dir'))
     report_gen = ReportGenerator(config.get('output_dir'))
 
@@ -46,8 +71,16 @@ def create_app():
     # Routes
     @app.route('/')
     def index():
-        """Main dashboard"""
-        return render_template('index.html')
+        """Main dashboard.
+
+        The token is embedded in the page only when the requester is already
+        trusted (loopback) or has presented a valid token via ``?token=``. A
+        remote operator bootstraps the UI by visiting ``/?token=<TOKEN>`` once;
+        the page then stores it for subsequent API calls.
+        """
+        trusted = (trust_loopback and is_loopback(request)) or \
+            token_matches(extract_token(request), auth_token)
+        return render_template('index.html', auth_token=auth_token if trusted else '')
 
     @app.route('/api/status')
     def get_status():
@@ -341,9 +374,11 @@ def create_app():
         """Download a report"""
         try:
             output_dir = config.get('output_dir')
-            filepath = os.path.join(output_dir, filename)
+            filepath = safe_path(output_dir, filename)
+            if filepath is None:
+                return jsonify({'error': 'Invalid report path'}), 400
 
-            if os.path.exists(filepath):
+            if os.path.isfile(filepath):
                 return send_file(filepath, as_attachment=True)
             else:
                 return jsonify({'error': 'Report not found'}), 404
@@ -355,7 +390,9 @@ def create_app():
         """Get logs for a specific module"""
         try:
             log_dir = config.get('log_dir')
-            log_file = os.path.join(log_dir, f"{module}.log")
+            log_file = safe_path(log_dir, f"{module}.log")
+            if log_file is None:
+                return jsonify({'error': 'Invalid module name'}), 400
 
             if os.path.exists(log_file):
                 with open(log_file, 'r') as f:
@@ -628,8 +665,16 @@ def create_app():
             return jsonify({'error': str(e)}), 500
 
     @socketio.on('connect')
-    def handle_connect():
-        """Handle client connection"""
+    def handle_connect(auth=None):
+        """Handle client connection.
+
+        Returning False rejects the WebSocket connection. Loopback clients are
+        trusted; remote clients must supply the token via ``io({auth:{token}})``.
+        """
+        if not (trust_loopback and is_loopback(request)):
+            provided = auth.get('token') if isinstance(auth, dict) else None
+            if not token_matches(provided, auth_token):
+                return False
         emit('connected', {'status': 'connected'})
 
     @socketio.on('ping')
@@ -644,8 +689,9 @@ def main():
     """Run the web application"""
     app, socketio = create_app()
 
-    # Run on all interfaces so it's accessible on the device screen
-    socketio.run(app, host='0.0.0.0', port=5000, debug=False)
+    host = os.environ.get('VIVISECT_WEB_HOST') or app.config['VIVISECT_HOST']
+    port = int(os.environ.get('VIVISECT_WEB_PORT') or app.config['VIVISECT_PORT'])
+    socketio.run(app, host=host, port=port, debug=False)
 
 
 if __name__ == '__main__':

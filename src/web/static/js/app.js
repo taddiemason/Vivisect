@@ -1,7 +1,34 @@
 // Vivisect Web GUI Application
 
-// Initialize Socket.IO
-const socket = io();
+// ── Auth token bootstrap ─────────────────────────────────────────────────
+// Token sources, in order: ?token= in the URL (remote bootstrap, persisted to
+// sessionStorage), a previously persisted token, or the token embedded in the
+// page by the server for trusted (loopback) requests.
+const VIVISECT_TOKEN = (function () {
+    const fromUrl = new URLSearchParams(window.location.search).get('token');
+    if (fromUrl) {
+        try { sessionStorage.setItem('vivisect_token', fromUrl); } catch (e) {}
+    }
+    const meta = document.querySelector('meta[name="vivisect-token"]');
+    let stored = '';
+    try { stored = sessionStorage.getItem('vivisect_token') || ''; } catch (e) {}
+    return fromUrl || stored || (meta && meta.content) || '';
+})();
+
+// Attach the token to every same-origin API call without touching the many
+// individual fetch() call sites.
+const _vivisectOrigFetch = window.fetch.bind(window);
+window.fetch = function (input, init) {
+    init = init || {};
+    const headers = new Headers(init.headers || {});
+    if (VIVISECT_TOKEN && !headers.has('X-Auth-Token')) {
+        headers.set('X-Auth-Token', VIVISECT_TOKEN);
+    }
+    return _vivisectOrigFetch(input, Object.assign({}, init, { headers: headers }));
+};
+
+// Initialize Socket.IO (token passed in the connection auth payload)
+const socket = io({ auth: { token: VIVISECT_TOKEN } });
 
 // State
 let currentTab = 'dashboard';
@@ -664,7 +691,10 @@ function listReports() {
 }
 
 function downloadReport(filename) {
-    window.open(`/api/reports/${filename}`, '_blank');
+    // window.open can't set headers, so the token rides as a query parameter.
+    const url = `/api/reports/${encodeURIComponent(filename)}` +
+        (VIVISECT_TOKEN ? `?token=${encodeURIComponent(VIVISECT_TOKEN)}` : '');
+    window.open(url, '_blank');
     log(`Downloading report: ${filename}`, 'success');
 }
 
