@@ -13,6 +13,9 @@ class Config:
         'log_dir': '/var/log/vivisect',
         'temp_dir': '/tmp/vivisect',
         'auto_start': True,
+        # Max concurrent background tasks in the web GUI (disk imaging, captures,
+        # collections). Keeps two heavy operations from thrashing the device.
+        'max_workers': 2,
         'web': {
             # Bind to loopback by default. Set to '0.0.0.0' to expose the GUI on
             # the network — at which point the auth token is enforced for any

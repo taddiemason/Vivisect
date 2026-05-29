@@ -6,12 +6,11 @@ import json
 from datetime import datetime
 from flask import Flask, render_template, jsonify, request, send_file
 from flask_socketio import SocketIO, emit
-import threading
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core import Config, ForensicsLogger, ReportGenerator
+from core import Config, ForensicsLogger, ReportGenerator, TaskManager
 from modules import (
     DiskImaging,
     FileAnalysis,
@@ -65,8 +64,32 @@ def create_app():
     artifact_extraction = ArtifactExtraction(logger, config)
     usb_gadget = USBGadget(logger, config)
 
-    # Store active tasks
-    active_tasks = {}
+    # Background task execution: bounded pool + retrievable job records,
+    # replacing the previous unbounded threading.Thread + active_tasks dict.
+    task_manager = TaskManager(
+        max_workers=int(config.get('max_workers', 2)),
+        logger=logger.get_logger('tasks'),
+    )
+
+    def emit_complete(task_name):
+        """Build an on_done callback that emits the legacy 'task_complete' event.
+
+        Preserves the existing client contract: ``result`` is the operation's
+        return value on success, or ``{success: False, error}`` on failure.
+        """
+        def _cb(task):
+            if task['state'] == TaskState.DONE.value:
+                result = task['result']
+            else:
+                result = {'success': False, 'error': task.get('error')}
+            with app.app_context():
+                socketio.emit('task_complete', {
+                    'task': task_name,
+                    'task_id': task['id'],
+                    'state': task['state'],
+                    'result': result,
+                }, namespace='/')
+        return _cb
 
     # Routes
     @app.route('/')
@@ -97,7 +120,7 @@ def create_app():
                     'artifact_extraction': config.get('modules.artifact_extraction.enabled', True),
                     'usb_gadget': config.get('modules.usb_gadget.enabled', True)
                 },
-                'active_tasks': len(active_tasks),
+                'active_tasks': task_manager.active_count(),
                 'output_dir': config.get('output_dir'),
                 'log_dir': config.get('log_dir'),
                 'usb_connected': usb_gadget.is_connected_to_host()
@@ -124,25 +147,11 @@ def create_app():
             output = data.get('output')
             method = data.get('method', 'dd')
 
-            def run_imaging():
-                try:
-                    if method == 'dd':
-                        result = disk_imaging.create_image_dd(device, output)
-                    else:
-                        result = disk_imaging.create_image_dcfldd(device, output)
-                except Exception as e:
-                    result = {'success': False, 'error': str(e)}
-
-                # Emit with app context for background threads
-                with app.app_context():
-                    socketio.emit('task_complete', {
-                        'task': 'disk_image',
-                        'result': result
-                    }, namespace='/')
-
-            task_id = f"disk_image_{datetime.now().timestamp()}"
-            active_tasks[task_id] = threading.Thread(target=run_imaging)
-            active_tasks[task_id].start()
+            fn = (disk_imaging.create_image_dd if method == 'dd'
+                  else disk_imaging.create_image_dcfldd)
+            task_id = task_manager.submit(
+                'disk_image', fn, device, output,
+                on_done=emit_complete('disk_image'))
 
             return jsonify({'task_id': task_id, 'status': 'started'})
         except Exception as e:
@@ -166,24 +175,10 @@ def create_app():
             output = data.get('output')
             duration = data.get('duration', 60)
 
-            def run_capture():
-                try:
-                    result = network_forensics.capture_traffic(
-                        interface, output, duration=duration
-                    )
-                except Exception as e:
-                    result = {'success': False, 'error': str(e)}
-
-                # Emit with app context for background threads
-                with app.app_context():
-                    socketio.emit('task_complete', {
-                        'task': 'network_capture',
-                        'result': result
-                    }, namespace='/')
-
-            task_id = f"capture_{datetime.now().timestamp()}"
-            active_tasks[task_id] = threading.Thread(target=run_capture)
-            active_tasks[task_id].start()
+            task_id = task_manager.submit(
+                'network_capture', network_forensics.capture_traffic,
+                interface, output, duration=duration,
+                on_done=emit_complete('network_capture'))
 
             return jsonify({'task_id': task_id, 'status': 'started'})
         except Exception as e:
@@ -206,22 +201,9 @@ def create_app():
             output = data.get('output')
             method = data.get('method', 'auto')
 
-            def run_dump():
-                try:
-                    result = memory_analysis.create_memory_dump(output, method)
-                except Exception as e:
-                    result = {'success': False, 'error': str(e)}
-
-                # Emit with app context for background threads
-                with app.app_context():
-                    socketio.emit('task_complete', {
-                        'task': 'memory_dump',
-                        'result': result
-                    }, namespace='/')
-
-            task_id = f"memory_dump_{datetime.now().timestamp()}"
-            active_tasks[task_id] = threading.Thread(target=run_dump)
-            active_tasks[task_id].start()
+            task_id = task_manager.submit(
+                'memory_dump', memory_analysis.create_memory_dump, output, method,
+                on_done=emit_complete('memory_dump'))
 
             return jsonify({'task_id': task_id, 'status': 'started'})
         except Exception as e:
@@ -283,62 +265,43 @@ def create_app():
             data = request.json
             case_id = data.get('case_id', f"CASE-{datetime.now().strftime('%Y%m%d-%H%M%S')}")
 
+            def progress(step):
+                with app.app_context():
+                    socketio.emit('progress', {'step': step, 'status': 'running'},
+                                  namespace='/')
+
             def run_full_collection():
                 report = report_gen.create_report(case_id)
 
-                # Memory analysis
-                with app.app_context():
-                    socketio.emit('progress', {'step': 'memory', 'status': 'running'}, namespace='/')
+                progress('memory')
                 memory_data = memory_analysis.analyze_running_system()
                 report_gen.add_finding(report, 'memory', {
-                    'type': 'live_analysis',
-                    'data': memory_data
-                })
+                    'type': 'live_analysis', 'data': memory_data})
 
-                # Browser artifacts
-                with app.app_context():
-                    socketio.emit('progress', {'step': 'browser', 'status': 'running'}, namespace='/')
+                progress('browser')
                 browser_data = artifact_extraction.extract_browser_history()
                 report_gen.add_finding(report, 'artifacts', {
-                    'type': 'browser',
-                    'data': browser_data
-                })
+                    'type': 'browser', 'data': browser_data})
 
-                # System logs
-                with app.app_context():
-                    socketio.emit('progress', {'step': 'logs', 'status': 'running'}, namespace='/')
+                progress('logs')
                 logs_data = artifact_extraction.extract_system_logs()
                 report_gen.add_finding(report, 'artifacts', {
-                    'type': 'logs',
-                    'data': logs_data
-                })
+                    'type': 'logs', 'data': logs_data})
 
-                # Persistence
-                with app.app_context():
-                    socketio.emit('progress', {'step': 'persistence', 'status': 'running'}, namespace='/')
+                progress('persistence')
                 persist_data = artifact_extraction.extract_persistence_mechanisms()
                 report_gen.add_finding(report, 'artifacts', {
-                    'type': 'persistence',
-                    'data': persist_data
-                })
+                    'type': 'persistence', 'data': persist_data})
 
-                # Save reports
-                json_report = report_gen.save_report(report, 'json')
-                html_report = report_gen.save_report(report, 'html')
+                return {
+                    'case_id': case_id,
+                    'json_report': report_gen.save_report(report, 'json'),
+                    'html_report': report_gen.save_report(report, 'html'),
+                }
 
-                with app.app_context():
-                    socketio.emit('task_complete', {
-                        'task': 'collection',
-                        'result': {
-                            'case_id': case_id,
-                            'json_report': json_report,
-                            'html_report': html_report
-                        }
-                    }, namespace='/')
-
-            task_id = f"collection_{datetime.now().timestamp()}"
-            active_tasks[task_id] = threading.Thread(target=run_full_collection)
-            active_tasks[task_id].start()
+            task_id = task_manager.submit(
+                'collection', run_full_collection,
+                on_done=emit_complete('collection'))
 
             return jsonify({'task_id': task_id, 'case_id': case_id, 'status': 'started'})
         except Exception as e:
@@ -404,6 +367,33 @@ def create_app():
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
+    # ── Background tasks ─────────────────────────────────────────────────────
+
+    @app.route('/api/tasks')
+    def list_tasks():
+        """List background tasks and their state (most recent first)."""
+        try:
+            return jsonify({'tasks': task_manager.list()})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/tasks/<task_id>')
+    def get_task(task_id):
+        """Fetch a single task's record — lets a client that missed the
+        'task_complete' socket event recover the result."""
+        task = task_manager.get(task_id)
+        if task is None:
+            return jsonify({'error': 'Task not found'}), 404
+        return jsonify(task.to_dict())
+
+    @app.route('/api/tasks/<task_id>/cancel', methods=['POST'])
+    def cancel_task(task_id):
+        """Request cancellation (effective only for tasks not yet started)."""
+        if task_manager.get(task_id) is None:
+            return jsonify({'error': 'Task not found'}), 404
+        cancel_requested = task_manager.cancel(task_id)
+        return jsonify({'task_id': task_id, 'cancel_requested': cancel_requested})
+
     @app.route('/api/usb/status')
     def usb_gadget_status():
         """Get USB gadget connection status"""
@@ -430,21 +420,9 @@ def create_app():
     def sync_mass_storage():
         """Sync reports to USB mass storage"""
         try:
-            def run_sync():
-                try:
-                    result = usb_gadget.sync_reports_to_storage()
-                except Exception as e:
-                    result = {'success': False, 'error': str(e)}
-
-                with app.app_context():
-                    socketio.emit('task_complete', {
-                        'task': 'mass_storage_sync',
-                        'result': result
-                    }, namespace='/')
-
-            task_id = f"mass_storage_sync_{datetime.now().timestamp()}"
-            active_tasks[task_id] = threading.Thread(target=run_sync)
-            active_tasks[task_id].start()
+            task_id = task_manager.submit(
+                'mass_storage_sync', usb_gadget.sync_reports_to_storage,
+                on_done=emit_complete('mass_storage_sync'))
 
             return jsonify({'task_id': task_id, 'status': 'started'})
         except Exception as e:
@@ -508,21 +486,9 @@ def create_app():
             data = request.json or {}
             output_file = data.get('output_file')
 
-            def run_capture():
-                try:
-                    result = usb_gadget.start_packet_capture(output_file)
-                except Exception as e:
-                    result = {'success': False, 'error': str(e)}
-
-                with app.app_context():
-                    socketio.emit('task_complete', {
-                        'task': 'usb_capture',
-                        'result': result
-                    }, namespace='/')
-
-            task_id = f"usb_capture_{datetime.now().timestamp()}"
-            active_tasks[task_id] = threading.Thread(target=run_capture)
-            active_tasks[task_id].start()
+            task_id = task_manager.submit(
+                'usb_capture', usb_gadget.start_packet_capture, output_file,
+                on_done=emit_complete('usb_capture'))
 
             return jsonify({'task_id': task_id, 'status': 'started'})
         except Exception as e:
@@ -532,21 +498,9 @@ def create_app():
     def start_auto_collection():
         """Start automatic collection on USB connection"""
         try:
-            def run_auto_collect():
-                try:
-                    result = usb_gadget.auto_collect_on_connection()
-                except Exception as e:
-                    result = {'success': False, 'error': str(e)}
-
-                with app.app_context():
-                    socketio.emit('task_complete', {
-                        'task': 'usb_auto_collect',
-                        'result': result
-                    }, namespace='/')
-
-            task_id = f"usb_auto_collect_{datetime.now().timestamp()}"
-            active_tasks[task_id] = threading.Thread(target=run_auto_collect)
-            active_tasks[task_id].start()
+            task_id = task_manager.submit(
+                'usb_auto_collect', usb_gadget.auto_collect_on_connection,
+                on_done=emit_complete('usb_auto_collect'))
 
             return jsonify({'task_id': task_id, 'status': 'started'})
         except Exception as e:
@@ -597,21 +551,9 @@ def create_app():
             if len(text) > 500:
                 return jsonify({'error': 'Text too long (max 500 characters)'}), 400
 
-            def run_hid_string():
-                try:
-                    result = usb_gadget.send_hid_string(text, delay_ms=delay_ms)
-                except Exception as e:
-                    result = {'success': False, 'error': str(e)}
-
-                with app.app_context():
-                    socketio.emit('task_complete', {
-                        'task': 'hid_send_string',
-                        'result': result
-                    }, namespace='/')
-
-            task_id = f"hid_string_{datetime.now().timestamp()}"
-            active_tasks[task_id] = threading.Thread(target=run_hid_string)
-            active_tasks[task_id].start()
+            task_id = task_manager.submit(
+                'hid_send_string', usb_gadget.send_hid_string, text,
+                delay_ms=delay_ms, on_done=emit_complete('hid_send_string'))
 
             return jsonify({
                 'task_id': task_id,
@@ -631,21 +573,9 @@ def create_app():
             if not payload_name:
                 return jsonify({'error': 'No payload name provided'}), 400
 
-            def run_hid_payload():
-                try:
-                    result = usb_gadget.execute_hid_payload(payload_name)
-                except Exception as e:
-                    result = {'success': False, 'error': str(e)}
-
-                with app.app_context():
-                    socketio.emit('task_complete', {
-                        'task': 'hid_execute_payload',
-                        'result': result
-                    }, namespace='/')
-
-            task_id = f"hid_payload_{datetime.now().timestamp()}"
-            active_tasks[task_id] = threading.Thread(target=run_hid_payload)
-            active_tasks[task_id].start()
+            task_id = task_manager.submit(
+                'hid_execute_payload', usb_gadget.execute_hid_payload, payload_name,
+                on_done=emit_complete('hid_execute_payload'))
 
             return jsonify({
                 'task_id': task_id,

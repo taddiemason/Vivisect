@@ -3,6 +3,7 @@
     "log_dir": "/var/log/vivisect",
     "temp_dir": "/tmp/vivisect",
     "auto_start": true,
+    "max_workers": 2,
     "web": {
         "host": "127.0.0.1",
         "port": 5000,
