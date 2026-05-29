@@ -7,6 +7,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any
 
+from core.result import OperationResult
+
 class DiskImaging:
     """Handles forensic disk imaging and verification"""
 
@@ -47,7 +49,7 @@ class DiskImaging:
         if not os.path.exists(source_device):
             error = f"Source device {source_device} does not exist"
             self.logger.error(error)
-            return {'success': False, 'error': error}
+            return OperationResult.fail(error)
 
         try:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -74,22 +76,19 @@ class DiskImaging:
             # Calculate hash of the image
             image_hash = self._calculate_file_hash(output_path) if os.path.exists(output_path) else None
 
-            result_info = {
-                'success': True,
+            self.logger.info(f"Imaging completed: {output_path}")
+            return OperationResult.ok({
                 'source': source_device,
                 'output': output_path,
                 'timestamp': timestamp,
                 'block_size': block_size,
                 'hash': image_hash,
-                'command': ' '.join(dd_cmd)
-            }
-
-            self.logger.info(f"Imaging completed: {output_path}")
-            return result_info
+                'command': ' '.join(dd_cmd),
+            })
 
         except Exception as e:
             self.logger.error(f"Imaging failed: {e}")
-            return {'success': False, 'error': str(e)}
+            return OperationResult.fail(e)
 
     def create_image_dcfldd(self, source_device: str, output_file: str,
                            hash_algorithm: str = 'sha256') -> Dict[str, Any]:
@@ -119,35 +118,31 @@ class DiskImaging:
             if result.returncode != 0:
                 raise Exception(f"dcfldd command failed: {result.stderr}")
 
-            result_info = {
-                'success': True,
+            self.logger.info(f"dcfldd imaging completed: {output_path}")
+            return OperationResult.ok({
                 'source': source_device,
                 'output': output_path,
                 'hash_file': hash_file,
                 'timestamp': timestamp,
-                'command': ' '.join(dcfldd_cmd)
-            }
-
-            self.logger.info(f"dcfldd imaging completed: {output_path}")
-            return result_info
+                'command': ' '.join(dcfldd_cmd),
+            })
 
         except Exception as e:
             self.logger.error(f"dcfldd imaging failed: {e}")
-            return {'success': False, 'error': str(e)}
+            return OperationResult.fail(e)
 
     def verify_image(self, image_path: str, original_device: str = None) -> Dict[str, Any]:
         """Verify integrity of forensic image"""
         self.logger.info(f"Verifying image: {image_path}")
 
         if not os.path.exists(image_path):
-            return {'success': False, 'error': 'Image file does not exist'}
+            return OperationResult.fail('Image file does not exist')
 
         try:
             # Calculate image hash
             image_hash = self._calculate_file_hash(image_path)
 
-            result = {
-                'success': True,
+            payload = {
                 'image_path': image_path,
                 'hash': image_hash,
                 'size': os.path.getsize(image_path),
@@ -157,15 +152,15 @@ class DiskImaging:
             # If original device provided, compare hashes
             if original_device and os.path.exists(original_device):
                 device_hash = self._calculate_device_hash(original_device)
-                result['device_hash'] = device_hash
-                result['verified'] = (image_hash == device_hash)
+                payload['device_hash'] = device_hash
+                payload['verified'] = (image_hash == device_hash)
 
             self.logger.info(f"Verification complete: {image_hash}")
-            return result
+            return OperationResult.ok(payload)
 
         except Exception as e:
             self.logger.error(f"Verification failed: {e}")
-            return {'success': False, 'error': str(e)}
+            return OperationResult.fail(e)
 
     def _calculate_file_hash(self, filepath: str, algorithm: str = 'sha256') -> str:
         """Calculate hash of a file"""
@@ -207,16 +202,15 @@ class DiskImaging:
 
             self.logger.info("Image split completed successfully")
 
-            return {
-                'success': True,
+            return OperationResult.ok({
                 'original': image_path,
                 'prefix': output_prefix,
-                'chunk_size': chunk_size
-            }
+                'chunk_size': chunk_size,
+            })
 
         except Exception as e:
             self.logger.error(f"Image splitting failed: {e}")
-            return {'success': False, 'error': str(e)}
+            return OperationResult.fail(e)
 
     def get_device_info(self, device: str) -> Dict[str, Any]:
         """Get detailed information about a device"""
