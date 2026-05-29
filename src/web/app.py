@@ -6,48 +6,94 @@ import json
 from datetime import datetime
 from flask import Flask, render_template, jsonify, request, send_file
 from flask_socketio import SocketIO, emit
-import threading
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core import Config, ForensicsLogger, ReportGenerator
-from modules import (
-    DiskImaging,
-    FileAnalysis,
-    NetworkForensics,
-    MemoryAnalysis,
-    ArtifactExtraction,
-    USBGadget
+from core import Config, TaskState
+from core.engine import VivisectEngine
+from web.security import (
+    resolve_token,
+    install_auth,
+    is_loopback,
+    token_matches,
+    extract_token,
+    safe_path,
 )
 
 def create_app():
     """Create and configure Flask application"""
     app = Flask(__name__)
     app.config['SECRET_KEY'] = os.urandom(24)
-    socketio = SocketIO(app, cors_allowed_origins="*")
 
     # Initialize Vivisect components
     config = Config()
-    logger = ForensicsLogger(config.get('log_dir'))
-    report_gen = ReportGenerator(config.get('output_dir'))
 
-    # Initialize modules
-    disk_imaging = DiskImaging(logger, config)
-    file_analysis = FileAnalysis(logger, config)
-    network_forensics = NetworkForensics(logger, config)
-    memory_analysis = MemoryAnalysis(logger, config)
-    artifact_extraction = ArtifactExtraction(logger, config)
-    usb_gadget = USBGadget(logger, config)
+    # ── Web security ────────────────────────────────────────────────────────
+    # Resolve the API token and lock down CORS/WebSocket origins. The token
+    # gates the JSON API for any non-loopback client (see web/security.py).
+    auth_token, token_generated = resolve_token(config)
+    trust_loopback = bool(config.get('web.trust_loopback', True))
+    allowed_origins = config.get('web.allowed_origins') or [
+        'http://127.0.0.1:5000', 'http://localhost:5000'
+    ]
 
-    # Store active tasks
-    active_tasks = {}
+    app.config['VIVISECT_TOKEN'] = auth_token
+    app.config['VIVISECT_TOKEN_GENERATED'] = token_generated
+    app.config['VIVISECT_HOST'] = config.get('web.host', '127.0.0.1')
+    app.config['VIVISECT_PORT'] = int(config.get('web.port', 5000))
+    app.config['VIVISECT_TRUST_LOOPBACK'] = trust_loopback
+
+    socketio = SocketIO(app, cors_allowed_origins=allowed_origins)
+    install_auth(app, auth_token, trust_loopback=trust_loopback)
+
+    # Shared composition root: config, logger, report generator, forensic
+    # modules, and the background task manager are all owned by the engine,
+    # which also defines workflows (collect) shared with the CLI.
+    engine = VivisectEngine(config)
+    logger = engine.logger
+    report_gen = engine.report_gen
+    disk_imaging = engine.disk
+    file_analysis = engine.file
+    network_forensics = engine.network
+    memory_analysis = engine.memory
+    artifact_extraction = engine.artifacts
+    usb_gadget = engine.usb
+    task_manager = engine.tasks
+
+    def emit_complete(task_name):
+        """Build an on_done callback that emits the legacy 'task_complete' event.
+
+        Preserves the existing client contract: ``result`` is the operation's
+        return value on success, or ``{success: False, error}`` on failure.
+        """
+        def _cb(task):
+            if task['state'] == TaskState.DONE.value:
+                result = task['result']
+            else:
+                result = {'success': False, 'error': task.get('error')}
+            with app.app_context():
+                socketio.emit('task_complete', {
+                    'task': task_name,
+                    'task_id': task['id'],
+                    'state': task['state'],
+                    'result': result,
+                }, namespace='/')
+        return _cb
 
     # Routes
     @app.route('/')
     def index():
-        """Main dashboard"""
-        return render_template('index.html')
+        """Main dashboard.
+
+        The token is embedded in the page only when the requester is already
+        trusted (loopback) or has presented a valid token via ``?token=``. A
+        remote operator bootstraps the UI by visiting ``/?token=<TOKEN>`` once;
+        the page then stores it for subsequent API calls.
+        """
+        trusted = (trust_loopback and is_loopback(request)) or \
+            token_matches(extract_token(request), auth_token)
+        return render_template('index.html', auth_token=auth_token if trusted else '')
 
     @app.route('/api/status')
     def get_status():
@@ -56,15 +102,8 @@ def create_app():
             status = {
                 'timestamp': datetime.now().isoformat(),
                 'vivisect_version': '1.0.0',
-                'modules': {
-                    'disk_imaging': config.get('modules.disk_imaging.enabled', True),
-                    'file_analysis': config.get('modules.file_analysis.enabled', True),
-                    'network_forensics': config.get('modules.network_forensics.enabled', True),
-                    'memory_analysis': config.get('modules.memory_analysis.enabled', True),
-                    'artifact_extraction': config.get('modules.artifact_extraction.enabled', True),
-                    'usb_gadget': config.get('modules.usb_gadget.enabled', True)
-                },
-                'active_tasks': len(active_tasks),
+                'modules': engine.module_status(),
+                'active_tasks': task_manager.active_count(),
                 'output_dir': config.get('output_dir'),
                 'log_dir': config.get('log_dir'),
                 'usb_connected': usb_gadget.is_connected_to_host()
@@ -91,25 +130,11 @@ def create_app():
             output = data.get('output')
             method = data.get('method', 'dd')
 
-            def run_imaging():
-                try:
-                    if method == 'dd':
-                        result = disk_imaging.create_image_dd(device, output)
-                    else:
-                        result = disk_imaging.create_image_dcfldd(device, output)
-                except Exception as e:
-                    result = {'success': False, 'error': str(e)}
-
-                # Emit with app context for background threads
-                with app.app_context():
-                    socketio.emit('task_complete', {
-                        'task': 'disk_image',
-                        'result': result
-                    }, namespace='/')
-
-            task_id = f"disk_image_{datetime.now().timestamp()}"
-            active_tasks[task_id] = threading.Thread(target=run_imaging)
-            active_tasks[task_id].start()
+            fn = (disk_imaging.create_image_dd if method == 'dd'
+                  else disk_imaging.create_image_dcfldd)
+            task_id = task_manager.submit(
+                'disk_image', fn, device, output,
+                on_done=emit_complete('disk_image'))
 
             return jsonify({'task_id': task_id, 'status': 'started'})
         except Exception as e:
@@ -133,24 +158,10 @@ def create_app():
             output = data.get('output')
             duration = data.get('duration', 60)
 
-            def run_capture():
-                try:
-                    result = network_forensics.capture_traffic(
-                        interface, output, duration=duration
-                    )
-                except Exception as e:
-                    result = {'success': False, 'error': str(e)}
-
-                # Emit with app context for background threads
-                with app.app_context():
-                    socketio.emit('task_complete', {
-                        'task': 'network_capture',
-                        'result': result
-                    }, namespace='/')
-
-            task_id = f"capture_{datetime.now().timestamp()}"
-            active_tasks[task_id] = threading.Thread(target=run_capture)
-            active_tasks[task_id].start()
+            task_id = task_manager.submit(
+                'network_capture', network_forensics.capture_traffic,
+                interface, output, duration=duration,
+                on_done=emit_complete('network_capture'))
 
             return jsonify({'task_id': task_id, 'status': 'started'})
         except Exception as e:
@@ -173,22 +184,9 @@ def create_app():
             output = data.get('output')
             method = data.get('method', 'auto')
 
-            def run_dump():
-                try:
-                    result = memory_analysis.create_memory_dump(output, method)
-                except Exception as e:
-                    result = {'success': False, 'error': str(e)}
-
-                # Emit with app context for background threads
-                with app.app_context():
-                    socketio.emit('task_complete', {
-                        'task': 'memory_dump',
-                        'result': result
-                    }, namespace='/')
-
-            task_id = f"memory_dump_{datetime.now().timestamp()}"
-            active_tasks[task_id] = threading.Thread(target=run_dump)
-            active_tasks[task_id].start()
+            task_id = task_manager.submit(
+                'memory_dump', memory_analysis.create_memory_dump, output, method,
+                on_done=emit_complete('memory_dump'))
 
             return jsonify({'task_id': task_id, 'status': 'started'})
         except Exception as e:
@@ -247,65 +245,24 @@ def create_app():
     def run_collection():
         """Run full forensics collection"""
         try:
-            data = request.json
+            data = request.json or {}
             case_id = data.get('case_id', f"CASE-{datetime.now().strftime('%Y%m%d-%H%M%S')}")
+            modules = data.get('modules')  # optional list of step names
+
+            def progress(step, status='running'):
+                with app.app_context():
+                    socketio.emit('progress', {'step': step, 'status': status},
+                                  namespace='/')
 
             def run_full_collection():
-                report = report_gen.create_report(case_id)
+                result = engine.collect(case_id, modules, progress=progress)
+                # The in-memory report is not JSON-friendly to ship back; the
+                # saved report paths are what the client needs.
+                return {k: v for k, v in result.items() if k != 'report'}
 
-                # Memory analysis
-                with app.app_context():
-                    socketio.emit('progress', {'step': 'memory', 'status': 'running'}, namespace='/')
-                memory_data = memory_analysis.analyze_running_system()
-                report_gen.add_finding(report, 'memory', {
-                    'type': 'live_analysis',
-                    'data': memory_data
-                })
-
-                # Browser artifacts
-                with app.app_context():
-                    socketio.emit('progress', {'step': 'browser', 'status': 'running'}, namespace='/')
-                browser_data = artifact_extraction.extract_browser_history()
-                report_gen.add_finding(report, 'artifacts', {
-                    'type': 'browser',
-                    'data': browser_data
-                })
-
-                # System logs
-                with app.app_context():
-                    socketio.emit('progress', {'step': 'logs', 'status': 'running'}, namespace='/')
-                logs_data = artifact_extraction.extract_system_logs()
-                report_gen.add_finding(report, 'artifacts', {
-                    'type': 'logs',
-                    'data': logs_data
-                })
-
-                # Persistence
-                with app.app_context():
-                    socketio.emit('progress', {'step': 'persistence', 'status': 'running'}, namespace='/')
-                persist_data = artifact_extraction.extract_persistence_mechanisms()
-                report_gen.add_finding(report, 'artifacts', {
-                    'type': 'persistence',
-                    'data': persist_data
-                })
-
-                # Save reports
-                json_report = report_gen.save_report(report, 'json')
-                html_report = report_gen.save_report(report, 'html')
-
-                with app.app_context():
-                    socketio.emit('task_complete', {
-                        'task': 'collection',
-                        'result': {
-                            'case_id': case_id,
-                            'json_report': json_report,
-                            'html_report': html_report
-                        }
-                    }, namespace='/')
-
-            task_id = f"collection_{datetime.now().timestamp()}"
-            active_tasks[task_id] = threading.Thread(target=run_full_collection)
-            active_tasks[task_id].start()
+            task_id = task_manager.submit(
+                'collection', run_full_collection,
+                on_done=emit_complete('collection'))
 
             return jsonify({'task_id': task_id, 'case_id': case_id, 'status': 'started'})
         except Exception as e:
@@ -341,9 +298,11 @@ def create_app():
         """Download a report"""
         try:
             output_dir = config.get('output_dir')
-            filepath = os.path.join(output_dir, filename)
+            filepath = safe_path(output_dir, filename)
+            if filepath is None:
+                return jsonify({'error': 'Invalid report path'}), 400
 
-            if os.path.exists(filepath):
+            if os.path.isfile(filepath):
                 return send_file(filepath, as_attachment=True)
             else:
                 return jsonify({'error': 'Report not found'}), 404
@@ -355,7 +314,9 @@ def create_app():
         """Get logs for a specific module"""
         try:
             log_dir = config.get('log_dir')
-            log_file = os.path.join(log_dir, f"{module}.log")
+            log_file = safe_path(log_dir, f"{module}.log")
+            if log_file is None:
+                return jsonify({'error': 'Invalid module name'}), 400
 
             if os.path.exists(log_file):
                 with open(log_file, 'r') as f:
@@ -366,6 +327,33 @@ def create_app():
                 return jsonify({'logs': []})
         except Exception as e:
             return jsonify({'error': str(e)}), 500
+
+    # ── Background tasks ─────────────────────────────────────────────────────
+
+    @app.route('/api/tasks')
+    def list_tasks():
+        """List background tasks and their state (most recent first)."""
+        try:
+            return jsonify({'tasks': task_manager.list()})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/tasks/<task_id>')
+    def get_task(task_id):
+        """Fetch a single task's record — lets a client that missed the
+        'task_complete' socket event recover the result."""
+        task = task_manager.get(task_id)
+        if task is None:
+            return jsonify({'error': 'Task not found'}), 404
+        return jsonify(task.to_dict())
+
+    @app.route('/api/tasks/<task_id>/cancel', methods=['POST'])
+    def cancel_task(task_id):
+        """Request cancellation (effective only for tasks not yet started)."""
+        if task_manager.get(task_id) is None:
+            return jsonify({'error': 'Task not found'}), 404
+        cancel_requested = task_manager.cancel(task_id)
+        return jsonify({'task_id': task_id, 'cancel_requested': cancel_requested})
 
     @app.route('/api/usb/status')
     def usb_gadget_status():
@@ -393,21 +381,9 @@ def create_app():
     def sync_mass_storage():
         """Sync reports to USB mass storage"""
         try:
-            def run_sync():
-                try:
-                    result = usb_gadget.sync_reports_to_storage()
-                except Exception as e:
-                    result = {'success': False, 'error': str(e)}
-
-                with app.app_context():
-                    socketio.emit('task_complete', {
-                        'task': 'mass_storage_sync',
-                        'result': result
-                    }, namespace='/')
-
-            task_id = f"mass_storage_sync_{datetime.now().timestamp()}"
-            active_tasks[task_id] = threading.Thread(target=run_sync)
-            active_tasks[task_id].start()
+            task_id = task_manager.submit(
+                'mass_storage_sync', usb_gadget.sync_reports_to_storage,
+                on_done=emit_complete('mass_storage_sync'))
 
             return jsonify({'task_id': task_id, 'status': 'started'})
         except Exception as e:
@@ -471,21 +447,9 @@ def create_app():
             data = request.json or {}
             output_file = data.get('output_file')
 
-            def run_capture():
-                try:
-                    result = usb_gadget.start_packet_capture(output_file)
-                except Exception as e:
-                    result = {'success': False, 'error': str(e)}
-
-                with app.app_context():
-                    socketio.emit('task_complete', {
-                        'task': 'usb_capture',
-                        'result': result
-                    }, namespace='/')
-
-            task_id = f"usb_capture_{datetime.now().timestamp()}"
-            active_tasks[task_id] = threading.Thread(target=run_capture)
-            active_tasks[task_id].start()
+            task_id = task_manager.submit(
+                'usb_capture', usb_gadget.start_packet_capture, output_file,
+                on_done=emit_complete('usb_capture'))
 
             return jsonify({'task_id': task_id, 'status': 'started'})
         except Exception as e:
@@ -495,21 +459,9 @@ def create_app():
     def start_auto_collection():
         """Start automatic collection on USB connection"""
         try:
-            def run_auto_collect():
-                try:
-                    result = usb_gadget.auto_collect_on_connection()
-                except Exception as e:
-                    result = {'success': False, 'error': str(e)}
-
-                with app.app_context():
-                    socketio.emit('task_complete', {
-                        'task': 'usb_auto_collect',
-                        'result': result
-                    }, namespace='/')
-
-            task_id = f"usb_auto_collect_{datetime.now().timestamp()}"
-            active_tasks[task_id] = threading.Thread(target=run_auto_collect)
-            active_tasks[task_id].start()
+            task_id = task_manager.submit(
+                'usb_auto_collect', usb_gadget.auto_collect_on_connection,
+                on_done=emit_complete('usb_auto_collect'))
 
             return jsonify({'task_id': task_id, 'status': 'started'})
         except Exception as e:
@@ -560,21 +512,9 @@ def create_app():
             if len(text) > 500:
                 return jsonify({'error': 'Text too long (max 500 characters)'}), 400
 
-            def run_hid_string():
-                try:
-                    result = usb_gadget.send_hid_string(text, delay_ms=delay_ms)
-                except Exception as e:
-                    result = {'success': False, 'error': str(e)}
-
-                with app.app_context():
-                    socketio.emit('task_complete', {
-                        'task': 'hid_send_string',
-                        'result': result
-                    }, namespace='/')
-
-            task_id = f"hid_string_{datetime.now().timestamp()}"
-            active_tasks[task_id] = threading.Thread(target=run_hid_string)
-            active_tasks[task_id].start()
+            task_id = task_manager.submit(
+                'hid_send_string', usb_gadget.send_hid_string, text,
+                delay_ms=delay_ms, on_done=emit_complete('hid_send_string'))
 
             return jsonify({
                 'task_id': task_id,
@@ -594,21 +534,9 @@ def create_app():
             if not payload_name:
                 return jsonify({'error': 'No payload name provided'}), 400
 
-            def run_hid_payload():
-                try:
-                    result = usb_gadget.execute_hid_payload(payload_name)
-                except Exception as e:
-                    result = {'success': False, 'error': str(e)}
-
-                with app.app_context():
-                    socketio.emit('task_complete', {
-                        'task': 'hid_execute_payload',
-                        'result': result
-                    }, namespace='/')
-
-            task_id = f"hid_payload_{datetime.now().timestamp()}"
-            active_tasks[task_id] = threading.Thread(target=run_hid_payload)
-            active_tasks[task_id].start()
+            task_id = task_manager.submit(
+                'hid_execute_payload', usb_gadget.execute_hid_payload, payload_name,
+                on_done=emit_complete('hid_execute_payload'))
 
             return jsonify({
                 'task_id': task_id,
@@ -628,8 +556,16 @@ def create_app():
             return jsonify({'error': str(e)}), 500
 
     @socketio.on('connect')
-    def handle_connect():
-        """Handle client connection"""
+    def handle_connect(auth=None):
+        """Handle client connection.
+
+        Returning False rejects the WebSocket connection. Loopback clients are
+        trusted; remote clients must supply the token via ``io({auth:{token}})``.
+        """
+        if not (trust_loopback and is_loopback(request)):
+            provided = auth.get('token') if isinstance(auth, dict) else None
+            if not token_matches(provided, auth_token):
+                return False
         emit('connected', {'status': 'connected'})
 
     @socketio.on('ping')
@@ -644,8 +580,9 @@ def main():
     """Run the web application"""
     app, socketio = create_app()
 
-    # Run on all interfaces so it's accessible on the device screen
-    socketio.run(app, host='0.0.0.0', port=5000, debug=False)
+    host = os.environ.get('VIVISECT_WEB_HOST') or app.config['VIVISECT_HOST']
+    port = int(os.environ.get('VIVISECT_WEB_PORT') or app.config['VIVISECT_PORT'])
+    socketio.run(app, host=host, port=port, debug=False)
 
 
 if __name__ == '__main__':

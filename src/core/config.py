@@ -13,6 +13,26 @@ class Config:
         'log_dir': '/var/log/vivisect',
         'temp_dir': '/tmp/vivisect',
         'auto_start': True,
+        # Max concurrent background tasks in the web GUI (disk imaging, captures,
+        # collections). Keeps two heavy operations from thrashing the device.
+        'max_workers': 2,
+        'web': {
+            # Bind to loopback by default. Set to '0.0.0.0' to expose the GUI on
+            # the network — at which point the auth token is enforced for any
+            # non-loopback client.
+            'host': '127.0.0.1',
+            'port': 5000,
+            # Leave empty to auto-generate a token at startup (printed to the
+            # console). Set explicitly, or via the VIVISECT_AUTH_TOKEN env var,
+            # for a stable token.
+            'auth_token': '',
+            # Origins permitted for CORS / WebSocket. Add the device's own URL
+            # here when binding to 0.0.0.0.
+            'allowed_origins': ['http://127.0.0.1:5000', 'http://localhost:5000'],
+            # Trust requests originating from the local machine without a token
+            # (keeps the on-device kiosk UI working). Disable behind a proxy.
+            'trust_loopback': True,
+        },
         'modules': {
             'disk_imaging': {
                 'enabled': True,
@@ -52,12 +72,25 @@ class Config:
             try:
                 with open(self.config_path, 'r') as f:
                     loaded_config = json.load(f)
-                    # Merge with defaults
-                    return {**self.DEFAULT_CONFIG, **loaded_config}
+                    # Deep-merge with defaults so a partial config (e.g. one
+                    # that sets a single nested key) does not discard the rest
+                    # of the nested defaults.
+                    return self._deep_merge(self.DEFAULT_CONFIG, loaded_config)
             except Exception as e:
                 print(f"Error loading config: {e}. Using defaults.")
-                return self.DEFAULT_CONFIG.copy()
-        return self.DEFAULT_CONFIG.copy()
+                return self._deep_merge(self.DEFAULT_CONFIG, {})
+        return self._deep_merge(self.DEFAULT_CONFIG, {})
+
+    @staticmethod
+    def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+        """Recursively merge ``override`` onto a copy of ``base``."""
+        result = dict(base)
+        for key, value in override.items():
+            if isinstance(value, dict) and isinstance(result.get(key), dict):
+                result[key] = Config._deep_merge(result[key], value)
+            else:
+                result[key] = value
+        return result
 
     def save_config(self) -> bool:
         """Save current configuration to file"""

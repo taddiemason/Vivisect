@@ -3,30 +3,24 @@
 import argparse
 import sys
 from datetime import datetime
-from core import Config, ForensicsLogger, ReportGenerator
-from modules import (
-    DiskImaging,
-    FileAnalysis,
-    NetworkForensics,
-    MemoryAnalysis,
-    ArtifactExtraction
-)
+from core.engine import VivisectEngine
 
 class VivisectCLI:
     """Command-line interface for Vivisect Digital Forensics Suite"""
 
     def __init__(self):
-        self.config = Config()
-        self.config.ensure_directories()
-        self.logger = ForensicsLogger(self.config.get('log_dir'))
-        self.report_gen = ReportGenerator(self.config.get('output_dir'))
-
-        # Initialize modules
-        self.disk_imaging = DiskImaging(self.logger, self.config)
-        self.file_analysis = FileAnalysis(self.logger, self.config)
-        self.network_forensics = NetworkForensics(self.logger, self.config)
-        self.memory_analysis = MemoryAnalysis(self.logger, self.config)
-        self.artifact_extraction = ArtifactExtraction(self.logger, self.config)
+        # The engine is the shared composition root (config, logger, report
+        # generator, modules, workflows). The aliases below keep the command
+        # handlers readable and unchanged.
+        self.engine = VivisectEngine()
+        self.config = self.engine.config
+        self.logger = self.engine.logger
+        self.report_gen = self.engine.report_gen
+        self.disk_imaging = self.engine.disk
+        self.file_analysis = self.engine.file
+        self.network_forensics = self.engine.network
+        self.memory_analysis = self.engine.memory
+        self.artifact_extraction = self.engine.artifacts
 
     def create_parser(self):
         """Create argument parser"""
@@ -400,47 +394,16 @@ class VivisectCLI:
         print(f"Case ID: {args.case_id}")
         print(f"{'='*60}\n")
 
-        report = self.report_gen.create_report(args.case_id)
+        def progress(step, status='running'):
+            print(f"[{step.upper()}] {status}")
 
-        # Run enabled modules
-        modules_to_run = args.modules if args.modules else ['file', 'network', 'memory', 'artifacts']
-
-        for module in modules_to_run:
-            print(f"\n[{module.upper()}] Running module...")
-
-            if module == 'memory':
-                result = self.memory_analysis.analyze_running_system()
-                self.report_gen.add_finding(report, 'memory', {
-                    'type': 'live_analysis',
-                    'description': 'Live system memory analysis',
-                    'data': result
-                })
-
-            elif module == 'artifacts':
-                browser_data = self.artifact_extraction.extract_browser_history()
-                logs_data = self.artifact_extraction.extract_system_logs()
-                user_data = self.artifact_extraction.extract_user_artifacts()
-
-                self.report_gen.add_finding(report, 'artifacts', {
-                    'type': 'browser_history',
-                    'description': 'Browser history extraction',
-                    'data': browser_data
-                })
-
-                self.report_gen.add_finding(report, 'artifacts', {
-                    'type': 'system_logs',
-                    'description': 'System logs extraction',
-                    'data': logs_data
-                })
-
-        # Save report
-        report_path = self.report_gen.save_report(report, 'json')
-        html_report_path = self.report_gen.save_report(report, 'html')
+        # Delegate to the single shared workflow definition on the engine.
+        result = self.engine.collect(args.case_id, args.modules, progress=progress)
 
         print(f"\n{'='*60}")
         print(f"Collection Complete!")
-        print(f"  JSON Report: {report_path}")
-        print(f"  HTML Report: {html_report_path}")
+        print(f"  JSON Report: {result['json_report']}")
+        print(f"  HTML Report: {result['html_report']}")
         print(f"{'='*60}\n")
 
         return 0
