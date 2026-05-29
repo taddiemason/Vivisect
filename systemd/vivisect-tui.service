@@ -1,0 +1,23 @@
+[Unit]
+Description=Vivisect Digital Forensics Suite - Terminal UI (on-device console)
+Documentation=https://github.com/vivisect/vivisect
+# Take over tty1 instead of the normal login prompt. Remove the Conflicts line
+# if you would rather launch the TUI manually from a shell.
+After=multi-user.target getty@tty1.service
+Conflicts=getty@tty1.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/vivisect-tui
+# Attach the process to the console so the full-screen TUI renders correctly.
+StandardInput=tty
+StandardOutput=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
