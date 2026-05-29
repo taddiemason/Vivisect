@@ -8,6 +8,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
+from core.result import OperationResult
+
 class FileAnalysis:
     """Handles file analysis, carving, and metadata extraction"""
 
@@ -179,8 +181,7 @@ class FileAnalysis:
                 '-o', output_dir
             ]
 
-            result = {
-                'success': True,
+            payload = {
                 'source': source,
                 'output_dir': output_dir,
                 'file_types': file_types,
@@ -193,18 +194,18 @@ class FileAnalysis:
                 for root, dirs, files in os.walk(output_dir):
                     for filename in files:
                         filepath = os.path.join(root, filename)
-                        result['carved_files'].append({
+                        payload['carved_files'].append({
                             'path': filepath,
                             'size': os.path.getsize(filepath),
                             'type': os.path.splitext(filename)[1]
                         })
 
-            self.logger.info(f"Carved {len(result['carved_files'])} files")
-            return result
+            self.logger.info(f"Carved {len(payload['carved_files'])} files")
+            return OperationResult.ok(payload)
 
         except Exception as e:
             self.logger.error(f"File carving failed: {e}")
-            return {'success': False, 'error': str(e)}
+            return OperationResult.fail(e)
 
     def search_strings(self, filepath: str, min_length: int = 4,
                       encoding: str = 'ascii') -> List[str]:

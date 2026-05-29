@@ -17,9 +17,11 @@ import time
 import uuid
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
+
+from .result import to_jsonable
 
 
 class TaskState(str, Enum):
@@ -47,9 +49,19 @@ class Task:
     finished_at: Optional[float] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        data = asdict(self)
-        data['state'] = self.state.value
-        return data
+        # Build explicitly (not asdict) so an OperationResult payload is
+        # flattened via to_jsonable rather than recursed into a nested
+        # {success, data, error, metadata} shape.
+        return {
+            'id': self.id,
+            'name': self.name,
+            'state': self.state.value,
+            'result': to_jsonable(self.result),
+            'error': self.error,
+            'created_at': self.created_at,
+            'started_at': self.started_at,
+            'finished_at': self.finished_at,
+        }
 
 
 class TaskManager:

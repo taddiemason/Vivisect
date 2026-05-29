@@ -10,8 +10,19 @@ from flask_socketio import SocketIO, emit
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core import Config, TaskState
+from flask.json.provider import DefaultJSONProvider
+
+from core import Config, TaskState, OperationResult
 from core.engine import VivisectEngine
+
+
+class VivisectJSONProvider(DefaultJSONProvider):
+    """Serialise OperationResult transparently so routes can jsonify one."""
+
+    def default(self, o):
+        if isinstance(o, OperationResult):
+            return o.to_dict()
+        return super().default(o)
 from web.security import (
     resolve_token,
     install_auth,
@@ -24,6 +35,7 @@ from web.security import (
 def create_app():
     """Create and configure Flask application"""
     app = Flask(__name__)
+    app.json = VivisectJSONProvider(app)
     app.config['SECRET_KEY'] = os.urandom(24)
 
     # Initialize Vivisect components

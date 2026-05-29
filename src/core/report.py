@@ -2,9 +2,16 @@
 
 import json
 import os
+import hashlib
 from datetime import datetime
 from typing import Dict, List, Any
 from pathlib import Path
+
+
+def _current_operator() -> str:
+    """Best-effort identity of the operator running the tool."""
+    return (os.environ.get('SUDO_USER') or os.environ.get('USER')
+            or os.environ.get('LOGNAME') or 'unknown')
 
 class ReportGenerator:
     """Generates forensics reports in various formats"""
@@ -20,12 +27,34 @@ class ReportGenerator:
             'timestamp': datetime.now().isoformat(),
             'hostname': os.uname().nodename,
             'vivisect_version': '1.0.0',
+            'operator': _current_operator(),
             'modules': {},
             'findings': [],
             'artifacts': [],
-            'timeline': []
+            'timeline': [],
+            'chain_of_custody': []
         }
+        # Opening custody record establishes who created the case and when.
+        self.add_custody_event(report, 'report_created',
+                               {'operator': report['operator']})
         return report
+
+    def add_custody_event(self, report: Dict[str, Any], action: str,
+                          details: Dict[str, Any] = None,
+                          hashes: Dict[str, str] = None) -> None:
+        """Append a chain-of-custody entry.
+
+        Records who did what, when — the audit trail an examiner relies on.
+        ``hashes`` carries any evidence digests associated with the action
+        (e.g. an image's source/image hash).
+        """
+        report.setdefault('chain_of_custody', []).append({
+            'timestamp': datetime.now().isoformat(),
+            'operator': _current_operator(),
+            'action': action,
+            'details': details or {},
+            'hashes': hashes or {},
+        })
 
     def add_finding(self, report: Dict[str, Any], module: str, finding: Dict[str, Any]) -> None:
         """Add a finding to the report"""
@@ -69,7 +98,22 @@ class ReportGenerator:
             with open(filepath, 'w') as f:
                 f.write(text_content)
 
+        # Tamper-evident: write a SHA-256 sidecar so the report's integrity can
+        # be checked later (e.g. `sha256sum -c <file>.sha256`).
+        self._write_integrity_sidecar(filepath)
         return filepath
+
+    def _write_integrity_sidecar(self, filepath: str) -> str:
+        """Write ``<filepath>.sha256`` containing the file's digest."""
+        digest = hashlib.sha256()
+        with open(filepath, 'rb') as f:
+            for chunk in iter(lambda: f.read(8192), b''):
+                digest.update(chunk)
+        sidecar = f"{filepath}.sha256"
+        with open(sidecar, 'w') as f:
+            # `<hash>  <name>` — the format sha256sum -c expects.
+            f.write(f"{digest.hexdigest()}  {os.path.basename(filepath)}\n")
+        return sidecar
 
     def _generate_html_report(self, report: Dict[str, Any]) -> str:
         """Generate HTML formatted report with interactive visualizations"""
