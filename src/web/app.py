@@ -10,15 +10,8 @@ from flask_socketio import SocketIO, emit
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core import Config, ForensicsLogger, ReportGenerator, TaskManager
-from modules import (
-    DiskImaging,
-    FileAnalysis,
-    NetworkForensics,
-    MemoryAnalysis,
-    ArtifactExtraction,
-    USBGadget
-)
+from core import Config, TaskState
+from core.engine import VivisectEngine
 from web.security import (
     resolve_token,
     install_auth,
@@ -53,23 +46,20 @@ def create_app():
 
     socketio = SocketIO(app, cors_allowed_origins=allowed_origins)
     install_auth(app, auth_token, trust_loopback=trust_loopback)
-    logger = ForensicsLogger(config.get('log_dir'))
-    report_gen = ReportGenerator(config.get('output_dir'))
 
-    # Initialize modules
-    disk_imaging = DiskImaging(logger, config)
-    file_analysis = FileAnalysis(logger, config)
-    network_forensics = NetworkForensics(logger, config)
-    memory_analysis = MemoryAnalysis(logger, config)
-    artifact_extraction = ArtifactExtraction(logger, config)
-    usb_gadget = USBGadget(logger, config)
-
-    # Background task execution: bounded pool + retrievable job records,
-    # replacing the previous unbounded threading.Thread + active_tasks dict.
-    task_manager = TaskManager(
-        max_workers=int(config.get('max_workers', 2)),
-        logger=logger.get_logger('tasks'),
-    )
+    # Shared composition root: config, logger, report generator, forensic
+    # modules, and the background task manager are all owned by the engine,
+    # which also defines workflows (collect) shared with the CLI.
+    engine = VivisectEngine(config)
+    logger = engine.logger
+    report_gen = engine.report_gen
+    disk_imaging = engine.disk
+    file_analysis = engine.file
+    network_forensics = engine.network
+    memory_analysis = engine.memory
+    artifact_extraction = engine.artifacts
+    usb_gadget = engine.usb
+    task_manager = engine.tasks
 
     def emit_complete(task_name):
         """Build an on_done callback that emits the legacy 'task_complete' event.
@@ -112,14 +102,7 @@ def create_app():
             status = {
                 'timestamp': datetime.now().isoformat(),
                 'vivisect_version': '1.0.0',
-                'modules': {
-                    'disk_imaging': config.get('modules.disk_imaging.enabled', True),
-                    'file_analysis': config.get('modules.file_analysis.enabled', True),
-                    'network_forensics': config.get('modules.network_forensics.enabled', True),
-                    'memory_analysis': config.get('modules.memory_analysis.enabled', True),
-                    'artifact_extraction': config.get('modules.artifact_extraction.enabled', True),
-                    'usb_gadget': config.get('modules.usb_gadget.enabled', True)
-                },
+                'modules': engine.module_status(),
                 'active_tasks': task_manager.active_count(),
                 'output_dir': config.get('output_dir'),
                 'log_dir': config.get('log_dir'),
@@ -262,42 +245,20 @@ def create_app():
     def run_collection():
         """Run full forensics collection"""
         try:
-            data = request.json
+            data = request.json or {}
             case_id = data.get('case_id', f"CASE-{datetime.now().strftime('%Y%m%d-%H%M%S')}")
+            modules = data.get('modules')  # optional list of step names
 
-            def progress(step):
+            def progress(step, status='running'):
                 with app.app_context():
-                    socketio.emit('progress', {'step': step, 'status': 'running'},
+                    socketio.emit('progress', {'step': step, 'status': status},
                                   namespace='/')
 
             def run_full_collection():
-                report = report_gen.create_report(case_id)
-
-                progress('memory')
-                memory_data = memory_analysis.analyze_running_system()
-                report_gen.add_finding(report, 'memory', {
-                    'type': 'live_analysis', 'data': memory_data})
-
-                progress('browser')
-                browser_data = artifact_extraction.extract_browser_history()
-                report_gen.add_finding(report, 'artifacts', {
-                    'type': 'browser', 'data': browser_data})
-
-                progress('logs')
-                logs_data = artifact_extraction.extract_system_logs()
-                report_gen.add_finding(report, 'artifacts', {
-                    'type': 'logs', 'data': logs_data})
-
-                progress('persistence')
-                persist_data = artifact_extraction.extract_persistence_mechanisms()
-                report_gen.add_finding(report, 'artifacts', {
-                    'type': 'persistence', 'data': persist_data})
-
-                return {
-                    'case_id': case_id,
-                    'json_report': report_gen.save_report(report, 'json'),
-                    'html_report': report_gen.save_report(report, 'html'),
-                }
+                result = engine.collect(case_id, modules, progress=progress)
+                # The in-memory report is not JSON-friendly to ship back; the
+                # saved report paths are what the client needs.
+                return {k: v for k, v in result.items() if k != 'report'}
 
             task_id = task_manager.submit(
                 'collection', run_full_collection,
