@@ -32,6 +32,10 @@ setup(
             'pefile>=2023.2.7',
             'pyelftools>=0.29',
         ],
+        # Browser-free terminal UI.
+        'tui': [
+            'textual>=0.50.0',
+        ],
         # Native (no-browser, no-network) GUI. Installed separately so the base
         # forensics install never pulls a web/GUI stack.
         'gui': [
@@ -41,6 +45,7 @@ setup(
     entry_points={
         'console_scripts': [
             'vivisect=cli:main',
+            'vivisect-tui=tui.app:main',
             'vivisect-gui-native=gui.app:main',
         ],
     },
