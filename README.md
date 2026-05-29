@@ -55,6 +55,12 @@
 - Modern, responsive UI with print optimization
 - JSON and plain text export options
 
+###  User Interfaces
+- **Native GUI** (Kivy) — touch-optimized desktop/kiosk app with **no browser and no network listener** (recommended for onboard displays and field devices)
+- **Terminal UI** (Textual) — browser-free TUI for SSH/headless and USB-serial use
+- **Command-Line Interface** — full, scriptable access to every module
+- **Web GUI** (legacy, opt-in) — Flask/Socket.IO app for remote browser access (opens a network port)
+
 ## Installation
 
 ### Prerequisites
@@ -104,6 +110,48 @@ sudo cp -r src /opt/vivisect/
 # Create symlink
 sudo ln -s /opt/vivisect/src/main.py /usr/local/bin/vivisect
 sudo chmod +x /usr/local/bin/vivisect
+```
+
+## Interfaces
+
+All front ends share the same engine and forensics modules — pick whichever fits
+the device and workflow.
+
+### Native GUI (recommended for onboard displays)
+
+A touch-optimized desktop application built with Kivy. It runs **fully in-process
+with no web server, no listening port, and no browser** — the smallest attack
+surface for a field forensics device. See [GUI_NATIVE.md](GUI_NATIVE.md).
+
+```bash
+pip install -r requirements.txt -r requirements-gui.txt   # or: pip install -e .[gui]
+
+# Windowed (desktop)
+cd src && python3 -m gui                  # or the entry point: vivisect-gui-native
+
+# Full-screen kiosk (onboard display)
+VIVISECT_GUI_FULLSCREEN=1 python3 -m gui
+sudo ./scripts/launch-gui-kiosk.sh        # kiosk launcher / systemd service
+```
+
+### Terminal UI
+
+A browser-free [Textual](https://textual.textualize.io) interface for SSH, headless,
+and USB-serial use. See [TUI_README.md](TUI_README.md).
+
+```bash
+pip install -e .[tui]
+vivisect-tui                              # or: python3 src/tui/app.py
+```
+
+### Web GUI (legacy, opt-in)
+
+The original Flask/Socket.IO browser interface. It opens a network port and is
+**not** started by the kiosk path — launch it explicitly only if you need remote
+browser access. See [GUI_README.md](GUI_README.md).
+
+```bash
+cd src && python3 -m web.app
 ```
 
 ## Usage
@@ -386,6 +434,9 @@ Example configuration:
 │   │   ├── network_forensics.py
 │   │   ├── memory_analysis.py
 │   │   └── artifact_extraction.py
+│   ├── gui/                # Native Kivy GUI (no browser, no network listener)
+│   ├── tui/                # Textual terminal UI
+│   ├── web/                # Web GUI (legacy, opt-in)
 │   ├── cli.py              # CLI interface
 │   └── main.py             # Main entry point
 
@@ -520,6 +571,8 @@ For issues, questions, or contributions:
 - [x] Enhanced reporting with visualization
 - [x] Timeline visualization
 - [x] Web-based GUI
+- [x] Native GUI (Kivy) — browser-free, no network listener
+- [x] Terminal UI (Textual) — browser-free, headless/SSH
 
 ###  Planned
 - [ ] Windows artifact support (via Wine/mounted NTFS)
