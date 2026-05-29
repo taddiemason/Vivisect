@@ -32,10 +32,14 @@ setup(
             'pefile>=2023.2.7',
             'pyelftools>=0.29',
         ],
+        'tui': [
+            'textual>=0.50.0',
+        ],
     },
     entry_points={
         'console_scripts': [
             'vivisect=cli:main',
+            'vivisect-tui=tui.app:main',
         ],
     },
     classifiers=[
