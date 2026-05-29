@@ -1,6 +1,7 @@
 """Disk imaging and acquisition module"""
 
 import os
+import stat
 import subprocess
 import hashlib
 from datetime import datetime
@@ -46,14 +47,18 @@ class DiskImaging:
         """Create a forensic image using dd"""
         self.logger.info(f"Starting dd imaging of {source_device}")
 
-        if not os.path.exists(source_device):
-            error = f"Source device {source_device} does not exist"
+        error = self._validate_source(source_device)
+        if error:
             self.logger.error(error)
             return OperationResult.fail(error)
 
         try:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            output_path = os.path.join(self.output_dir, output_file)
+            output_path = self._safe_output_path(output_file)
+            if output_path is None:
+                error = f"Invalid output path '{output_file}' (must stay within {self.output_dir})"
+                self.logger.error(error)
+                return OperationResult.fail(error)
 
             # Build dd command
             dd_cmd = [
@@ -73,16 +78,24 @@ class DiskImaging:
             if result.returncode != 0:
                 raise Exception(f"dd command failed: {result.stderr}")
 
-            # Calculate hash of the image
-            image_hash = self._calculate_file_hash(output_path) if os.path.exists(output_path) else None
+            # Hash-on-acquire: hash the image and the source and compare so the
+            # caller gets a verified copy, not just an unverified hash.
+            image_hash, source_hash, verified = self._verify_against_source(
+                output_path, source_device)
+            if not verified:
+                self.logger.warning(
+                    f"Image hash does not match source for {source_device} "
+                    f"(image={image_hash}, source={source_hash})")
 
-            self.logger.info(f"Imaging completed: {output_path}")
+            self.logger.info(f"Imaging completed: {output_path} (verified={verified})")
             return OperationResult.ok({
                 'source': source_device,
                 'output': output_path,
                 'timestamp': timestamp,
                 'block_size': block_size,
                 'hash': image_hash,
+                'source_hash': source_hash,
+                'verified': verified,
                 'command': ' '.join(dd_cmd),
             })
 
@@ -95,9 +108,18 @@ class DiskImaging:
         """Create a forensic image using dcfldd with built-in hashing"""
         self.logger.info(f"Starting dcfldd imaging of {source_device}")
 
+        error = self._validate_source(source_device)
+        if error:
+            self.logger.error(error)
+            return OperationResult.fail(error)
+
         try:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            output_path = os.path.join(self.output_dir, output_file)
+            output_path = self._safe_output_path(output_file)
+            if output_path is None:
+                error = f"Invalid output path '{output_file}' (must stay within {self.output_dir})"
+                self.logger.error(error)
+                return OperationResult.fail(error)
             hash_file = f"{output_path}.{hash_algorithm}"
 
             dcfldd_cmd = [
@@ -118,11 +140,21 @@ class DiskImaging:
             if result.returncode != 0:
                 raise Exception(f"dcfldd command failed: {result.stderr}")
 
-            self.logger.info(f"dcfldd imaging completed: {output_path}")
+            image_hash, source_hash, verified = self._verify_against_source(
+                output_path, source_device, hash_algorithm)
+            if not verified:
+                self.logger.warning(
+                    f"Image hash does not match source for {source_device} "
+                    f"(image={image_hash}, source={source_hash})")
+
+            self.logger.info(f"dcfldd imaging completed: {output_path} (verified={verified})")
             return OperationResult.ok({
                 'source': source_device,
                 'output': output_path,
                 'hash_file': hash_file,
+                'hash': image_hash,
+                'source_hash': source_hash,
+                'verified': verified,
                 'timestamp': timestamp,
                 'command': ' '.join(dcfldd_cmd),
             })
@@ -177,6 +209,47 @@ class DiskImaging:
     def _calculate_device_hash(self, device_path: str, algorithm: str = 'sha256') -> str:
         """Calculate hash of a block device"""
         return self._calculate_file_hash(device_path, algorithm)
+
+    # ── forensic-integrity helpers ────────────────────────────────────────────
+    def _validate_source(self, device: str) -> Optional[str]:
+        """Return an error string if ``device`` is not a safe imaging source.
+
+        A source must exist and be either a block device (the normal case) or a
+        regular file (re-imaging an existing image). This prevents an arbitrary
+        path / FIFO / socket from being fed to dd.
+        """
+        if not os.path.exists(device):
+            return f"Source device {device} does not exist"
+        try:
+            mode = os.stat(device).st_mode
+        except OSError as e:
+            return f"Cannot stat {device}: {e}"
+        if not (stat.S_ISBLK(mode) or stat.S_ISREG(mode)):
+            return f"{device} is not a block device or regular file"
+        return None
+
+    def _safe_output_path(self, output_file: str) -> Optional[str]:
+        """Resolve ``output_file`` inside the output dir, rejecting traversal."""
+        base = os.path.realpath(self.output_dir)
+        target = os.path.realpath(os.path.join(base, output_file))
+        if target == base or target.startswith(base + os.sep):
+            return target
+        return None
+
+    def _verify_against_source(self, image_path: str, source_device: str,
+                               algorithm: str = 'sha256'):
+        """Hash the written image and the source, and compare.
+
+        Returns ``(image_hash, source_hash, verified)``. ``verified`` is True
+        only when both hashes were computed and match — establishing that the
+        acquisition is a faithful copy. A mismatch is expected when dd had to
+        pad unreadable sectors (``conv=noerror,sync``) and flags a bad read.
+        """
+        image_hash = self._calculate_file_hash(image_path, algorithm) \
+            if os.path.exists(image_path) else None
+        source_hash = self._calculate_device_hash(source_device, algorithm)
+        verified = bool(image_hash) and image_hash == source_hash
+        return image_hash, source_hash, verified
 
     def split_image(self, image_path: str, chunk_size: str = '650M') -> Dict[str, Any]:
         """Split large image into smaller chunks"""

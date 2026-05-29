@@ -103,23 +103,31 @@ class VivisectEngine:
         notify = progress or (lambda step, status='running': None)
         report = self.report_gen.create_report(case_id)
         steps = list(modules) if modules else list(self.DEFAULT_COLLECT_STEPS)
+        self.report_gen.add_custody_event(report, 'collection_started',
+                                          {'case_id': case_id, 'steps': steps})
 
         for step in steps:
             if step in self.PARAMETERIZED_STEPS:
                 self.logger.main_logger.info(
                     f"collect: step '{step}' needs a target and was skipped")
+                self.report_gen.add_custody_event(report, 'step_skipped', {'step': step})
                 notify(step, 'skipped')
                 continue
             notify(step, 'running')
             try:
                 for finding in self._collect_step(step):
                     self.report_gen.add_finding(report, finding['module'], finding)
+                self.report_gen.add_custody_event(report, 'step_completed', {'step': step})
                 notify(step, 'done')
             except Exception as exc:
                 self.logger.main_logger.error(
                     f"collect: step '{step}' failed: {exc}", exc_info=True)
+                self.report_gen.add_custody_event(
+                    report, 'step_failed', {'step': step, 'error': str(exc)})
                 notify(step, 'error')
 
+        self.report_gen.add_custody_event(report, 'collection_completed',
+                                          {'case_id': case_id})
         return {
             'case_id': case_id,
             'report': report,
